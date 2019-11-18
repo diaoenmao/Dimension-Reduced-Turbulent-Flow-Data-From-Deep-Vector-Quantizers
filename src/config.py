@@ -1,0 +1,31 @@
+def init():
+    global PARAM
+    PARAM = {
+        'data_name': 'TURB',
+        'model_name': 'st',
+        'control_name': '',
+        'optimizer_name': 'Adam',
+        'lr': 1e-3,
+        'momentum': 0.9,
+        'weight_decay': 0,
+        'scheduler_name': 'MultiStepLR',
+        'step_size': 1,
+        'milestones': [50],
+        'patience': 5,
+        'threshold': 1e-3,
+        'factor': 0.1,
+        'batch_size': {'train': 10, 'test': 14},
+        'shuffle': {'train': True, 'test': False},
+        'num_workers': 0,
+        'device': 'cuda',
+        'num_epochs': 100,
+        'save_mode': 0,
+        'world_size': 1,
+        'metric_names': {'train':['Loss'],'test':['Loss']},
+        'init_seed': 0,
+        'num_Experiments': 1,
+        'log_interval': 0.25,
+        'normalization': 'none',
+        'activation': 'relu',
+        'resume_mode': 0
+    }
