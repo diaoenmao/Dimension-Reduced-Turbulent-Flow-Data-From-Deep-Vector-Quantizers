@@ -51,7 +51,6 @@ class TURB(Dataset):
         fmt_str += '    Number of data points: {}\n'.format(self.__len__())
         fmt_str += '    Split: {}\n'.format(self.split)
         fmt_str += '    Root: {}\n'.format(self.root)
-        fmt_str += '    Transforms: {}\n'.format(self.transform.__repr__())
         return fmt_str
 
 
