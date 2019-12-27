@@ -11,7 +11,7 @@ from utils import save, load, to_device, process_control_name, process_dataset, 
 from logger import Logger
 
 if __name__ == "__main__":
-    dataset = fetch_dataset('TURB')
+    dataset = fetch_dataset('TURB', subset='H')
     data_loader = make_data_loader(dataset)
     print(len(data_loader['train']), len(data_loader['test']))
     input = next(iter(data_loader['test']))

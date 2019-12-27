@@ -8,8 +8,6 @@ from tabulate import tabulate
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
-from torch.nn.modules.batchnorm import _BatchNorm
-from torch.nn.modules.conv import _ConvNd
 from data import fetch_dataset, make_data_loader
 from utils import makedir_exist_ok, to_device, process_control_name, process_dataset, collate
 
@@ -84,11 +82,11 @@ def summarize(data_loader, model):
                 return
             if 'weight' in summary['module'][key]['params']:
                 weight_size = summary['module'][key]['params']['weight']['size']
-                if isinstance(module, _ConvNd) or isinstance(module, nn.Linear) or isinstance(module, nn.Embedding):
+                if len(weight_size) == 2:
                     summary['module'][key]['coordinates'].append(
                         [torch.arange(weight_size[0], device=config.PARAM['device']),
                          torch.arange(weight_size[1], device=config.PARAM['device'])])
-                elif isinstance(module, _BatchNorm):
+                elif len(weight_size) == 1:
                     summary['module'][key]['coordinates'].append(
                         [torch.arange(weight_size[0], device=config.PARAM['device'])])
                 else:

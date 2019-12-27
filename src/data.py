@@ -5,14 +5,13 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
 
-def fetch_dataset(data_name):
+def fetch_dataset(data_name, subset):
     dataset = {}
     print('fetching data {}...'.format(data_name))
-    data_name_head = data_name.split('_')[0]
-    root = './data/{}'.format(data_name_head)
-    if data_name_head == 'TURB':
-        dataset['train'] = datasets.TURB(root=root, split='train', download=True)
-        dataset['test'] = datasets.TURB(root=root, split='test', download=True)
+    root = './data/{}'.format(data_name)
+    if data_name == 'TURB':
+        dataset['train'] = datasets.TURB(root=root, split='train', subset=subset)
+        dataset['test'] = datasets.TURB(root=root, split='test', subset=subset)
     else:
         raise ValueError('Not valid dataset name')
     print('data ready')

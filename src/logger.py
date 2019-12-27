@@ -1,7 +1,6 @@
 from collections import defaultdict
 from torch.utils.tensorboard import SummaryWriter
 from numbers import Number
-from utils import recur
 
 
 class Logger():
@@ -39,12 +38,6 @@ class Logger():
             if mean:
                 if isinstance(result[k], Number):
                     self.mean[name] = ((self.counter[name] - n) * self.mean[name] + n * result[k]) / self.counter[name]
-                elif isinstance(result[k], list):
-                    if self.counter[name] == n:
-                        self.mean[name] = [0] * len(result[k])
-                    for i in range(len(result[k])):
-                        self.mean[name][i] = ((self.counter[name] - n) * self.mean[name][i] + n * result[k][i]) / \
-                                             self.counter[name]
                 else:
                     raise ValueError('Not valid data type')
         return
@@ -56,8 +49,6 @@ class Logger():
             tag, k = name.split('/')
             if isinstance(self.mean[name], Number):
                 s = self.mean[name]
-            elif isinstance(self.mean[name], list):
-                s = sum(self.mean[name]) / len(self.mean[name])
             else:
                 raise ValueError('Not valid data type')
             evaluation_info.append('{}: {:.4f}'.format(k, s))
@@ -72,4 +63,8 @@ class Logger():
         if self.writer is not None:
             self.iterator[info_name] += 1
             self.writer.add_text(info_name, info, self.iterator[info_name])
+        return
+
+    def flush(self):
+        self.writer.flush()
         return

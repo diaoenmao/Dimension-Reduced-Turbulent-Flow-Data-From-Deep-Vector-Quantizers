@@ -7,6 +7,10 @@ import torch
 from itertools import repeat
 
 
+def check_exists(path):
+    return os.path.exists(path)
+
+
 def makedir_exist_ok(path):
     try:
         os.makedirs(path)
