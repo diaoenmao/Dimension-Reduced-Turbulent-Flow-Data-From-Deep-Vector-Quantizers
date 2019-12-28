@@ -14,18 +14,28 @@ from logger import Logger
 cudnn.benchmark = True
 parser = argparse.ArgumentParser(description='Config')
 for k in config.PARAM:
-    exec('parser.add_argument(\'--{0}\',default=config.PARAM[\'{0}\'], help=\'\')'.format(k))
+    exec('parser.add_argument(\'--{0}\',default=config.PARAM[\'{0}\'], type=type(config.PARAM[\'{0}\']))'.format(k))
+parser.add_argument('--control_name', default=None, type=str)
 args = vars(parser.parse_args())
 for k in config.PARAM:
-    if config.PARAM[k] != args[k]:
-        exec('config.PARAM[\'{0}\'] = {1}'.format(k, args[k]))
+    config.PARAM[k] = args[k]
+if args['control_name']:
+    config.PARAM['control_name'] = args['control_name']
+    control_list = list(config.PARAM['control'].keys())
+    control_name_list = args['control_name'].split('_')
+    for i in range(len(control_name_list)):
+        config.PARAM['control'][control_list[i]] = control_name_list[i]
+control_name_list = []
+for k in config.PARAM['control']:
+    control_name_list.append(config.PARAM['control'][k])
+config.PARAM['control_name'] = '_'.join(control_name_list)
 
 
 def main():
     process_control_name()
     seeds = list(range(config.PARAM['init_seed'], config.PARAM['init_seed'] + config.PARAM['num_Experiments']))
     for i in range(config.PARAM['num_Experiments']):
-        model_tag_list = [str(seeds[i]), config.PARAM['data_name'], config.PARAM['model_name'],
+        model_tag_list = [str(seeds[i]), config.PARAM['data_name'], config.PARAM['subset'], config.PARAM['model_name'],
                           config.PARAM['control_name']]
         config.PARAM['model_tag'] = '_'.join(filter(None, model_tag_list))
         print('Experiment: {}'.format(config.PARAM['model_tag']))
@@ -37,14 +47,15 @@ def runExperiment():
     seed = int(config.PARAM['model_tag'].split('_')[0])
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    dataset = fetch_dataset(config.PARAM['data_name'])
+    dataset = fetch_dataset(config.PARAM['data_name'], config.PARAM['subset'])
     process_dataset(dataset['train'])
     data_loader = make_data_loader(dataset)
     model = eval('models.{}().to(config.PARAM["device"])'.format(config.PARAM['model_name']))
     load_tag = 'best'
-    last_epoch, model, _, _, _ = resume(model, config.PARAM['model_tag'], load_tag)
+    last_epoch, model, _, _, _ = resume(model, config.PARAM['model_tag'], load_tag=load_tag)
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
-    logger_path = 'output/runs/{}_{}'.format(config.PARAM['model_tag'], current_time)
+    logger_path = 'output/runs/test_{}_{}'.format(config.PARAM['model_tag'], current_time) if config.PARAM[
+        'log_overwrite'] else 'output/runs/test_{}'.format(config.PARAM['model_tag'])
     logger = Logger(logger_path)
     logger.safe(True)
     test(data_loader['test'], model, logger, last_epoch)

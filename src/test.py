@@ -12,8 +12,8 @@ from logger import Logger
 
 if __name__ == "__main__":
     dataset = fetch_dataset('TURB', subset='H')
+    print(len(dataset['train']), len(dataset['test']))
     data_loader = make_data_loader(dataset)
-    print(len(data_loader['train']), len(data_loader['test']))
-    input = next(iter(data_loader['test']))
+    input = next(iter(data_loader['train']))
     input = collate(input)
     print(input['A'].size(), input['H'].size())

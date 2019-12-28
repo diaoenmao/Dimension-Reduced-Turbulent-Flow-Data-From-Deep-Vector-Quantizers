@@ -89,7 +89,10 @@ def recur(fn, input, *args):
 
 
 def process_control_name():
-    control_name = config.PARAM['control_name'].split('_')
+    config.PARAM['normalization'] = config.PARAM['control']['normalization']
+    config.PARAM['activation'] = config.PARAM['control']['activation']
+    config.PARAM['hidden_size'] = int(config.PARAM['control']['hidden_size'])
+    config.PARAM['depth'] = int(config.PARAM['control']['depth'])
     return
 
 

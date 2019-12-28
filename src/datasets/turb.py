@@ -79,8 +79,8 @@ class TURB(Dataset):
         A = np.concatenate(cat_A, axis=1)
         H = np.concatenate(cat_H, axis=1)
         from skimage.util.shape import view_as_blocks
-        A = view_as_blocks(A, block_shape=(9, 32, 32, 32)).reshape(-1, 9, 32, 32, 32)
-        H = view_as_blocks(H, block_shape=(6, 32, 32, 32)).reshape(-1, 6, 32, 32, 32)
+        A = view_as_blocks(A, block_shape=(9, 32, 32, 32)).reshape(-1, 9, 32, 32, 32).astype(np.float32)
+        H = view_as_blocks(H, block_shape=(6, 32, 32, 32)).reshape(-1, 6, 32, 32, 32).astype(np.float32)
         train_A, train_H, test_A, test_H = A[:50], H[:50], A[50:], H[50:]
         train_input, test_input = train_A, test_A
         train_target, test_target = {'H': train_H}, {'H': test_H}
