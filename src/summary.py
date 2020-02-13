@@ -93,17 +93,6 @@ def summarize(data_loader, model):
                 weight_size = summary['module'][key]['params']['weight']['size']
                 summary['module'][key]['coordinates'].append(
                     [torch.arange(weight_size[i], device=config.PARAM['device']) for i in range(len(weight_size))])
-                # print(weight_size)
-                # exit()
-                # if len(weight_size) == 2:
-                #     summary['module'][key]['coordinates'].append(
-                #         [torch.arange(weight_size[0], device=config.PARAM['device']),
-                #          torch.arange(weight_size[1], device=config.PARAM['device'])])
-                # elif len(weight_size) == 1:
-                #     summary['module'][key]['coordinates'].append(
-                #         [torch.arange(weight_size[0], device=config.PARAM['device'])])
-                # else:
-                #     raise ValueError('Not valid parametrized module')
             else:
                 raise ValueError('Not valid parametrized module')
             for name in summary['module'][key]['params']:
