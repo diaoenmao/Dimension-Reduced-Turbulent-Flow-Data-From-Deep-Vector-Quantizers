@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Iterable
 from torch.utils.tensorboard import SummaryWriter
 from numbers import Number
 
@@ -38,7 +39,14 @@ class Logger():
             if mean:
                 if isinstance(result[k], Number):
                     self.mean[name] = ((self.counter[name] - n) * self.mean[name] + n * result[k]) / self.counter[name]
+                elif isinstance(result[k], Iterable):
+                    if name not in self.mean:
+                        self.mean[name] = [0 for _ in range(len(result[k]))]
+                    for i in range(len(result[k])):
+                        self.mean[name][i] = ((self.counter[name] - n) * self.mean[name][i] + n * result[k][i]) \
+                                             / self.counter[name]
                 else:
+                    print(result[k])
                     raise ValueError('Not valid data type')
         return
 
@@ -49,12 +57,18 @@ class Logger():
             tag, k = name.split('/')
             if isinstance(self.mean[name], Number):
                 s = self.mean[name]
+                evaluation_info.append('{}: {:.4f}'.format(k, s))
+                if self.writer is not None:
+                    self.iterator[name] += 1
+                    self.writer.add_scalar(name, s, self.iterator[name])
+            elif isinstance(self.mean[name], Iterable):
+                s = tuple(self.mean[name])
+                evaluation_info.append('{}: {}'.format(k, s))
+                if self.writer is not None:
+                    self.iterator[name] += 1
+                    self.writer.add_scalar(name, s[0], self.iterator[name])
             else:
                 raise ValueError('Not valid data type')
-            evaluation_info.append('{}: {:.4f}'.format(k, s))
-            if self.writer is not None:
-                self.iterator[name] += 1
-                self.writer.add_scalar(name, s, self.iterator[name])
         info_name = '{}/info'.format(tag)
         info = self.tracker[info_name]
         info[2:2] = evaluation_info

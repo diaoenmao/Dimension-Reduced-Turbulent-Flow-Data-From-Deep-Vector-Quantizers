@@ -2,9 +2,11 @@ import collections.abc as container_abcs
 import config
 import errno
 import numpy as np
+import itertools
 import os
 import torch
 from itertools import repeat
+from torchvision.utils import save_image
 
 
 def check_exists(path):
@@ -22,7 +24,7 @@ def makedir_exist_ok(path):
     return
 
 
-def save(input, path, protocol=2, mode='torch'):
+def save(input, path, protocol=4, mode='torch'):
     dirname = os.path.dirname(path)
     makedir_exist_ok(dirname)
     if mode == 'torch':
@@ -41,6 +43,12 @@ def load(path, mode='torch'):
         return np.load(path)
     else:
         raise ValueError('Not valid save mode')
+    return
+
+
+def save_img(img, path, nrow=10, padding=2, pad_value=0):
+    makedir_exist_ok(os.path.dirname(path))
+    save_image(img, path, nrow=nrow, padding=padding, pad_value=pad_value)
     return
 
 
@@ -89,10 +97,11 @@ def recur(fn, input, *args):
 
 
 def process_control_name():
-    config.PARAM['normalization'] = config.PARAM['control']['normalization']
-    config.PARAM['activation'] = config.PARAM['control']['activation']
-    config.PARAM['hidden_size'] = int(config.PARAM['control']['hidden_size'])
-    config.PARAM['depth'] = int(config.PARAM['control']['depth'])
+    config.PARAM['normalization'] = 'bn'
+    config.PARAM['activation'] = 'relu'
+    config.PARAM['hidden_size'] = 16
+    config.PARAM['cascade_size'] = 3
+    config.PARAM['depth'] = 4
     return
 
 
@@ -142,7 +151,23 @@ def process_dataset(dataset):
     return
 
 
-def resume(model, model_tag, load_tag='checkpoint', optimizer=None, scheduler=None):
+def make_mode_dataset(dataset):
+    mode_img = []
+    mode_target = []
+    img = np.array(dataset.img)
+    target = np.array(dataset.target[config.PARAM['subset']], dtype=np.int64)
+    for i in range(config.PARAM['classes_size']):
+        img_i = img[target == i]
+        target_i = target[target == i]
+        mode_data_size = len(target_i) if config.PARAM['mode_data_size'] == 0 else config.PARAM['mode_data_size']
+        mode_img.append(img_i[:mode_data_size])
+        mode_target.append(target_i[:mode_data_size])
+    dataset.img = [img for model_img_i in mode_img for img in model_img_i]
+    dataset.target[config.PARAM['subset']] = [target for model_target_i in mode_target for target in model_target_i]
+    return
+
+
+def resume(model, model_tag, optimizer=None, scheduler=None, load_tag='checkpoint', verbose=True):
     if os.path.exists('./output/model/{}_{}.pt'.format(model_tag, load_tag)):
         checkpoint = load('./output/model/{}_{}.pt'.format(model_tag, load_tag))
         last_epoch = checkpoint['epoch']
@@ -152,11 +177,18 @@ def resume(model, model_tag, load_tag='checkpoint', optimizer=None, scheduler=No
         if scheduler is not None:
             scheduler.load_state_dict(checkpoint['scheduler_dict'])
         logger = checkpoint['logger']
-        print('Resume from {}'.format(last_epoch))
-        return last_epoch, model, optimizer, scheduler, logger
+        if verbose:
+            print('Resume from {}'.format(last_epoch))
     else:
-        raise ValueError('Not exists model tag')
-    return
+        print('Not exists model tag: {}, start from scratch'.format(model_tag))
+        import datetime
+        from logger import Logger
+        last_epoch = 1
+        current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
+        logger_path = 'output/runs/train_{}_{}'.format(config.PARAM['model_tag'], current_time) if config.PARAM[
+            'log_overwrite'] else 'output/runs/train_{}'.format(config.PARAM['model_tag'])
+        logger = Logger(logger_path)
+    return last_epoch, model, optimizer, scheduler, logger
 
 
 def collate(input):

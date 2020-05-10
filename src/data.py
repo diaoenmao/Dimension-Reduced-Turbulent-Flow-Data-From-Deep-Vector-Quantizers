@@ -9,9 +9,9 @@ def fetch_dataset(data_name, subset):
     dataset = {}
     print('fetching data {}...'.format(data_name))
     root = './data/{}'.format(data_name)
-    if data_name == 'TURB':
-        dataset['train'] = datasets.TURB(root=root, split='train', subset=subset)
-        dataset['test'] = datasets.TURB(root=root, split='test', subset=subset)
+    if data_name == 'Turb':
+        dataset['train'] = datasets.Turb(root=root, split='train', subset=subset)
+        dataset['test'] = datasets.Turb(root=root, split='test', subset=subset)
     else:
         raise ValueError('Not valid dataset name')
     print('data ready')

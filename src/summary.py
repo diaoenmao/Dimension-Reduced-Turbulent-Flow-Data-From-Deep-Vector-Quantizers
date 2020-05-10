@@ -21,10 +21,16 @@ for k in config.PARAM:
     config.PARAM[k] = args[k]
 if args['control_name']:
     config.PARAM['control_name'] = args['control_name']
-    control_list = list(config.PARAM['control'].keys())
-    control_name_list = args['control_name'].split('_')
-    for i in range(len(control_name_list)):
-        config.PARAM['control'][control_list[i]] = control_name_list[i]
+    if config.PARAM['control_name'] != 'None':
+        control_list = list(config.PARAM['control'].keys())
+        control_name_list = args['control_name'].split('_')
+        for i in range(len(control_name_list)):
+            config.PARAM['control'][control_list[i]] = control_name_list[i]
+    else:
+        config.PARAM['control'] = {}
+else:
+    if config.PARAM['control'] == 'None':
+        config.PARAM['control'] = {}
 control_name_list = []
 for k in config.PARAM['control']:
     control_name_list.append(config.PARAM['control'][k])
@@ -70,20 +76,20 @@ def summarize(data_loader, model):
             summary['module'][key]['output_size'].append(output_size)
             for name, param in module.named_parameters():
                 if param.requires_grad:
-                    if name == 'weight':
+                    if name in ['weight', 'weight_orig']:
                         if name not in summary['module'][key]['params']:
-                            summary['module'][key]['params'][name] = {}
-                            summary['module'][key]['params'][name]['size'] = list(param.size())
+                            summary['module'][key]['params']['weight'] = {}
+                            summary['module'][key]['params']['weight']['size'] = list(param.size())
                             summary['module'][key]['coordinates'] = []
-                            summary['module'][key]['params'][name]['mask'] = torch.zeros(
-                                summary['module'][key]['params'][name]['size'], dtype=torch.long,
+                            summary['module'][key]['params']['weight']['mask'] = torch.zeros(
+                                summary['module'][key]['params']['weight']['size'], dtype=torch.long,
                                 device=config.PARAM['device'])
                     elif name == 'bias':
                         if name not in summary['module'][key]['params']:
-                            summary['module'][key]['params'][name] = {}
-                            summary['module'][key]['params'][name]['size'] = list(param.size())
-                            summary['module'][key]['params'][name]['mask'] = torch.zeros(
-                                summary['module'][key]['params'][name]['size'], dtype=torch.long,
+                            summary['module'][key]['params']['bias'] = {}
+                            summary['module'][key]['params']['bias']['size'] = list(param.size())
+                            summary['module'][key]['params']['bias']['mask'] = torch.zeros(
+                                summary['module'][key]['params']['bias']['size'], dtype=torch.long,
                                 device=config.PARAM['device'])
                     else:
                         continue

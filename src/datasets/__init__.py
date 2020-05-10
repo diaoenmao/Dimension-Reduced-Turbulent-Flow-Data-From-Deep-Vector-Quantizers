@@ -1,3 +1,3 @@
-from .turb import TURB
+from .turb import Turb
 
-__all__ = ('TURB')
+__all__ = ('Turb')

@@ -12,9 +12,11 @@ import torch.backends.cudnn as cudnn
 import torch.optim as optim
 from data import fetch_dataset, make_data_loader
 from metrics import Metric
-from utils import save, to_device, process_control_name, process_dataset, resume, collate
+from utils import save, to_device, process_control_name, process_dataset, resume, collate, save_img
 from logger import Logger
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 cudnn.benchmark = True
 parser = argparse.ArgumentParser(description='Config')
 for k in config.PARAM:
@@ -25,22 +27,33 @@ for k in config.PARAM:
     config.PARAM[k] = args[k]
 if args['control_name']:
     config.PARAM['control_name'] = args['control_name']
-    control_list = list(config.PARAM['control'].keys())
-    control_name_list = args['control_name'].split('_')
-    for i in range(len(control_name_list)):
-        config.PARAM['control'][control_list[i]] = control_name_list[i]
+    if config.PARAM['control_name'] != 'None':
+        control_list = list(config.PARAM['control'].keys())
+        control_name_list = args['control_name'].split('_')
+        for i in range(len(control_name_list)):
+            config.PARAM['control'][control_list[i]] = control_name_list[i]
+    else:
+        config.PARAM['control'] = {}
+else:
+    if config.PARAM['control'] == 'None':
+        config.PARAM['control'] = {}
 control_name_list = []
 for k in config.PARAM['control']:
     control_name_list.append(config.PARAM['control'][k])
 config.PARAM['control_name'] = '_'.join(control_name_list)
+config.PARAM['lr'] = 2e-4
+config.PARAM['weight_decay'] = 0
+config.PARAM['batch_size'] = {'train': 4, 'test': 32}
+config.PARAM['metric_names'] = {'train': ['Loss', 'MSE'], 'test': ['Loss', 'MSE']}
 
 
 def main():
     process_control_name()
-    seeds = list(range(config.PARAM['init_seed'], config.PARAM['init_seed'] + config.PARAM['num_Experiments']))
-    for i in range(config.PARAM['num_Experiments']):
+    seeds = list(range(config.PARAM['init_seed'], config.PARAM['init_seed'] + config.PARAM['num_experiments']))
+    for i in range(config.PARAM['num_experiments']):
         model_tag_list = [str(seeds[i]), config.PARAM['data_name'], config.PARAM['subset'], config.PARAM['model_name'],
                           config.PARAM['control_name']]
+        model_tag_list = [x for x in model_tag_list if x]
         config.PARAM['model_tag'] = '_'.join(filter(None, model_tag_list))
         print('Experiment: {}'.format(config.PARAM['model_tag']))
         runExperiment()
@@ -55,8 +68,7 @@ def runExperiment():
     process_dataset(dataset['train'])
     data_loader = make_data_loader(dataset)
     model = eval('models.{}().to(config.PARAM["device"])'.format(config.PARAM['model_name']))
-    if config.PARAM['world_size'] > 1:
-        model = torch.nn.DataParallel(model, device_ids=list(range(config.PARAM['world_size'])))
+    model.apply(models.utils.init_param)
     optimizer = make_optimizer(model)
     scheduler = make_scheduler(optimizer)
     if config.PARAM['resume_mode'] == 1:
@@ -73,16 +85,18 @@ def runExperiment():
         logger_path = 'output/runs/train_{}_{}'.format(config.PARAM['model_tag'], current_time) if config.PARAM[
             'log_overwrite'] else 'output/runs/train_{}'.format(config.PARAM['model_tag'])
         logger = Logger(logger_path)
-    config.PARAM['pivot_metric'] = 'test/Loss'
+    if config.PARAM['world_size'] > 1:
+        model = torch.nn.DataParallel(model, device_ids=list(range(config.PARAM['world_size'])))
+    config.PARAM['pivot_metric'] = 'test/MSE'
     config.PARAM['pivot'] = 1e10
     for epoch in range(last_epoch, config.PARAM['num_epochs'] + 1):
         logger.safe(True)
         train(data_loader['train'], model, optimizer, logger, epoch)
-        test(data_loader['test'], model, logger, epoch)
+        test(data_loader['train'], model, logger, epoch)
         if config.PARAM['scheduler_name'] == 'ReduceLROnPlateau':
             scheduler.step(metrics=logger.tracker[config.PARAM['pivot_metric']], epoch=epoch)
         else:
-            scheduler.step(epoch=epoch + 1)
+            scheduler.step()
         if config.PARAM['save_mode'] >= 0:
             logger.safe(False)
             model_state_dict = model.module.state_dict() if config.PARAM['world_size'] > 1 else model.state_dict()
@@ -91,8 +105,8 @@ def runExperiment():
                 'optimizer_dict': optimizer.state_dict(), 'scheduler_dict': scheduler.state_dict(),
                 'logger': logger}
             save(save_result, './output/model/{}_checkpoint.pt'.format(config.PARAM['model_tag']))
-            if config.PARAM['pivot'] > logger.tracker[config.PARAM['pivot_metric']]:
-                config.PARAM['pivot'] = logger.tracker[config.PARAM['pivot_metric']]
+            if config.PARAM['pivot'] > logger.mean[config.PARAM['pivot_metric']]:
+                config.PARAM['pivot'] = logger.mean[config.PARAM['pivot_metric']]
                 shutil.copy('./output/model/{}_checkpoint.pt'.format(config.PARAM['model_tag']),
                             './output/model/{}_best.pt'.format(config.PARAM['model_tag']))
         logger.reset()
@@ -106,9 +120,9 @@ def train(data_loader, model, optimizer, logger, epoch):
     for i, input in enumerate(data_loader):
         start_time = time.time()
         input = collate(input)
-        input_size = len(input['A'])
+        input_size = input['img'].size(0)
         input = to_device(input, config.PARAM['device'])
-        model.zero_grad()
+        optimizer.zero_grad()
         output = model(input)
         output['loss'] = output['loss'].mean() if config.PARAM['world_size'] > 1 else output['loss']
         output['loss'].backward()
@@ -136,14 +150,14 @@ def test(data_loader, model, logger, epoch):
         model.train(False)
         for i, input in enumerate(data_loader):
             input = collate(input)
-            input_size = len(input['A'])
+            input_size = input['img'].size(0)
             input = to_device(input, config.PARAM['device'])
             output = model(input)
             output['loss'] = output['loss'].mean() if config.PARAM['world_size'] > 1 else output['loss']
             evaluation = metric.evaluate(config.PARAM['metric_names']['test'], input, output)
             logger.append(evaluation, 'test', input_size)
-        info = {'info': ['Model: {}'.format(config.PARAM['model_tag']),
-                         'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
+        logger.append(evaluation, 'test')
+        info = {'info': ['Model: {}'.format(config.PARAM['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', config.PARAM['metric_names']['test'])
     return
@@ -172,6 +186,8 @@ def make_scheduler(optimizer):
     elif config.PARAM['scheduler_name'] == 'MultiStepLR':
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=config.PARAM['milestones'],
                                                    gamma=config.PARAM['factor'])
+    elif config.PARAM['scheduler_name'] == 'ExponentialLR':
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
     elif config.PARAM['scheduler_name'] == 'CosineAnnealingLR':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.PARAM['num_epochs'])
     elif config.PARAM['scheduler_name'] == 'ReduceLROnPlateau':

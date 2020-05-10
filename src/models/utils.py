@@ -49,3 +49,15 @@ def denormalize(input):
     return input
 
 
+def init_param(m):
+    if isinstance(m, (nn.BatchNorm2d)):
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0.0)
+    return m
+
+
+def make_SpectralNormalization(m):
+    if isinstance(m, (nn.Linear, nn.Conv2d, nn.ConvTranspose2d)):
+        return torch.nn.utils.spectral_norm(m)
+    else:
+        return m
