@@ -1,0 +1,45 @@
+---
+# control
+control: {}
+# data
+data_name: Turb
+subset: Phy
+batch_size:
+  train: 128
+  test: 128
+shuffle:
+  train: True
+  test: False
+num_workers: 0
+model_name: cascade
+metric_name:
+  train:
+    - Loss
+    - NLL
+  test:
+    - Loss
+    - NLL
+# optimizer
+optimizer_name: Adam
+lr: 1e-3
+momentum: 0
+weight_decay: 0
+# scheduler
+scheduler_name: None
+step_size: 1
+milestones:
+  - 100
+  - 150
+patience: 10
+threshold: 1e-3
+factor: 0.5
+# experiment
+init_seed: 0
+num_experiments: 1
+num_epochs: 200
+log_interval: 0.25
+device: cuda
+world_size: 1
+resume_mode: 0
+# other
+

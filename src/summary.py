@@ -1,60 +1,53 @@
-import config
-
-config.init()
 import argparse
 from collections import OrderedDict
 import models
+import os
+from config import cfg
 from tabulate import tabulate
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from data import fetch_dataset, make_data_loader
-from utils import makedir_exist_ok, to_device, process_control_name, process_dataset, collate
+from utils import makedir_exist_ok, to_device, process_control, process_dataset, collate
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 cudnn.benchmark = True
-parser = argparse.ArgumentParser(description='Config')
-for k in config.PARAM:
-    exec('parser.add_argument(\'--{0}\',default=config.PARAM[\'{0}\'], type=type(config.PARAM[\'{0}\']))'.format(k))
+parser = argparse.ArgumentParser(description='cfg')
+for k in cfg:
+    exec('parser.add_argument(\'--{0}\', default=cfg[\'{0}\'], type=type(cfg[\'{0}\']))'.format(k))
 parser.add_argument('--control_name', default=None, type=str)
 args = vars(parser.parse_args())
-for k in config.PARAM:
-    config.PARAM[k] = args[k]
+for k in cfg:
+    cfg[k] = args[k]
 if args['control_name']:
-    config.PARAM['control_name'] = args['control_name']
-    if config.PARAM['control_name'] != 'None':
-        control_list = list(config.PARAM['control'].keys())
-        control_name_list = args['control_name'].split('_')
-        for i in range(len(control_name_list)):
-            config.PARAM['control'][control_list[i]] = control_name_list[i]
-    else:
-        config.PARAM['control'] = {}
-else:
-    if config.PARAM['control'] == 'None':
-        config.PARAM['control'] = {}
-control_name_list = []
-for k in config.PARAM['control']:
-    control_name_list.append(config.PARAM['control'][k])
-config.PARAM['control_name'] = '_'.join(control_name_list)
+    cfg['control'] = {k: v for k, v in zip(cfg['control'].keys(), args['control_name'].split('_'))} \
+        if args['control_name'] != 'None' else {}
+cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
+cfg['batch_size'] = {'train': 2, 'test': 2}
 
 
 def main():
-    process_control_name()
+    process_control()
     runExperiment()
     return
 
 
 def runExperiment():
-    dataset = fetch_dataset(config.PARAM['data_name'], config.PARAM['subset'])
+    dataset = fetch_dataset(cfg['data_name'], cfg['subset'])
     process_dataset(dataset['train'])
     data_loader = make_data_loader(dataset)
-    model = eval('models.{}().to(config.PARAM["device"])'.format(config.PARAM['model_name']))
-    summary = summarize(data_loader['train'], model)
+    if 'pixelcnn' in cfg['model_name']:
+        ae = eval('models.{}().to(cfg["device"])'.format(cfg['ae_name']))
+    else:
+        ae = None
+    model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
+    summary = summarize(data_loader['train'], model, ae)
     content = parse_summary(summary)
     print(content)
     return
 
 
-def summarize(data_loader, model):
+def summarize(data_loader, model, ae=None):
     def register_hook(module):
 
         def hook(module, input, output):
@@ -83,14 +76,14 @@ def summarize(data_loader, model):
                             summary['module'][key]['coordinates'] = []
                             summary['module'][key]['params']['weight']['mask'] = torch.zeros(
                                 summary['module'][key]['params']['weight']['size'], dtype=torch.long,
-                                device=config.PARAM['device'])
+                                device=cfg['device'])
                     elif name == 'bias':
                         if name not in summary['module'][key]['params']:
                             summary['module'][key]['params']['bias'] = {}
                             summary['module'][key]['params']['bias']['size'] = list(param.size())
                             summary['module'][key]['params']['bias']['mask'] = torch.zeros(
                                 summary['module'][key]['params']['bias']['size'], dtype=torch.long,
-                                device=config.PARAM['device'])
+                                device=cfg['device'])
                     else:
                         continue
             if len(summary['module'][key]['params']) == 0:
@@ -98,7 +91,7 @@ def summarize(data_loader, model):
             if 'weight' in summary['module'][key]['params']:
                 weight_size = summary['module'][key]['params']['weight']['size']
                 summary['module'][key]['coordinates'].append(
-                    [torch.arange(weight_size[i], device=config.PARAM['device']) for i in range(len(weight_size))])
+                    [torch.arange(weight_size[i], device=cfg['device']) for i in range(len(weight_size))])
             else:
                 raise ValueError('Not valid parametrized module')
             for name in summary['module'][key]['params']:
@@ -136,7 +129,10 @@ def summarize(data_loader, model):
     model.apply(register_hook)
     for i, input in enumerate(data_loader):
         input = collate(input)
-        input = to_device(input, config.PARAM['device'])
+        input = to_device(input, cfg['device'])
+        if ae is not None:
+            with torch.no_grad():
+                input['img'] = ae.encode(input).detach()
         model(input)
         break
     for h in hooks:

@@ -31,33 +31,8 @@ def make_model(model):
     return
 
 
-def normalize(input):
-    broadcast_size = [1] * input.dim()
-    broadcast_size[1] = input.size(1)
-    m = config.PARAM['stats'].mean.view(broadcast_size).to(input.device)
-    s = config.PARAM['stats'].std.view(broadcast_size).to(input.device)
-    input = input.sub(m).div(s)
-    return input
-
-
-def denormalize(input):
-    broadcast_size = [1] * input.dim()
-    broadcast_size[1] = input.size(1)
-    m = config.PARAM['stats'].mean.view(broadcast_size).to(input.device)
-    s = config.PARAM['stats'].std.view(broadcast_size).to(input.device)
-    input = input.mul(s).add(m)
-    return input
-
-
 def init_param(m):
     if isinstance(m, (nn.BatchNorm2d)):
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0.0)
     return m
-
-
-def make_SpectralNormalization(m):
-    if isinstance(m, (nn.Linear, nn.Conv2d, nn.ConvTranspose2d)):
-        return torch.nn.utils.spectral_norm(m)
-    else:
-        return m

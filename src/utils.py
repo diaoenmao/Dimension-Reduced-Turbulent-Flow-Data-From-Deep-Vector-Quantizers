@@ -1,12 +1,11 @@
 import collections.abc as container_abcs
-import config
 import errno
 import numpy as np
-import itertools
 import os
 import torch
 from itertools import repeat
 from torchvision.utils import save_image
+from config import cfg
 
 
 def check_exists(path):
@@ -24,13 +23,13 @@ def makedir_exist_ok(path):
     return
 
 
-def save(input, path, protocol=4, mode='torch'):
+def save(input, path, protocol=2, mode='torch'):
     dirname = os.path.dirname(path)
     makedir_exist_ok(dirname)
     if mode == 'torch':
         torch.save(input, path, pickle_protocol=protocol)
     elif mode == 'numpy':
-        np.save(path, input)
+        np.save(path, input, allow_pickle=True)
     else:
         raise ValueError('Not valid save mode')
     return
@@ -40,15 +39,15 @@ def load(path, mode='torch'):
     if mode == 'torch':
         return torch.load(path, map_location=lambda storage, loc: storage)
     elif mode == 'numpy':
-        return np.load(path)
+        return np.load(path, allow_pickle=True)
     else:
         raise ValueError('Not valid save mode')
     return
 
 
-def save_img(img, path, nrow=10, padding=2, pad_value=0):
+def save_img(img, path, nrow=10, padding=2, pad_value=0, range=None):
     makedir_exist_ok(os.path.dirname(path))
-    save_image(img, path, nrow=nrow, padding=padding, pad_value=pad_value)
+    save_image(img, path, nrow=nrow, padding=padding, pad_value=pad_value, range=range)
     return
 
 
@@ -96,12 +95,62 @@ def recur(fn, input, *args):
     return output
 
 
-def process_control_name():
-    config.PARAM['normalization'] = 'bn'
-    config.PARAM['activation'] = 'relu'
-    config.PARAM['hidden_size'] = 16
-    config.PARAM['cascade_size'] = 3
-    config.PARAM['depth'] = 4
+def process_dataset(dataset):
+    cfg['classes_size'] = dataset.classes_size
+    return
+
+
+def process_control():
+    if 'controller_rate' in cfg['control']:
+        cfg['controller_rate'] = float(cfg['control']['controller_rate'])
+    if cfg['data_name'] in ['MNIST', 'FashionMNIST']:
+        cfg['img_shape'] = [1, 32, 32]
+        cfg['generate_per_mode'] = 1000
+    elif cfg['data_name'] in ['Omniglot']:
+        cfg['img_shape'] = [1, 32, 32]
+        cfg['generate_per_mode'] = 20
+    elif cfg['data_name'] in ['SVHN', 'CIFAR10', 'CIFAR100']:
+        cfg['img_shape'] = [3, 32, 32]
+        cfg['generate_per_mode'] = 1000
+    elif cfg['data_name'] in ['ImageNet32']:
+        cfg['img_shape'] = [3, 32, 32]
+        cfg['generate_per_mode'] = 20
+    elif cfg['data_name'] in ['ImageNet64']:
+        cfg['img_shape'] = [3, 64, 64]
+        cfg['generate_per_mode'] = 20
+    else:
+        raise ValueError('Not valid dataset')
+    if cfg['ae_name'] in ['vqvae']:
+        cfg['hidden_size'] = 128
+        cfg['conditional_embedding_size'] = 32
+        cfg['quantizer_embedding_size'] = 64
+        cfg['num_embedding'] = 512
+        cfg['vq_commit'] = 0.25
+    if cfg['model_name'] in ['cpixelcnn', 'mcpixelcnn']:
+        cfg['n_layers'] = 15
+        cfg['hidden_size'] = 128
+        cfg['num_embedding'] = 512
+    elif cfg['model_name'] in ['cvae', 'mcvae']:
+        cfg['hidden_size'] = [64, 128, 256]
+        cfg['latent_size'] = 128
+        cfg['conditional_embedding_size'] = 32
+        cfg['encode_shape'] = [cfg['hidden_size'][-1],
+                               cfg['img_shape'][1] // (2 ** len(cfg['hidden_size'])),
+                               cfg['img_shape'][2] // (2 ** len(cfg['hidden_size']))]
+    elif cfg['model_name'] in ['cgan', 'mcgan']:
+        cfg['generator_normalization'] = 'bn'
+        cfg['discriminator_normalization'] = 'none'
+        cfg['generator_activation'] = 'relu'
+        cfg['discriminator_activation'] = 'relu'
+        cfg['latent_size'] = 128
+        cfg['generator_hidden_size'] = [512, 256, 128, 64]
+        cfg['discriminator_hidden_size'] = [64, 128, 256, 512]
+    elif cfg['model_name'] in ['cglow', 'mcglow']:
+        cfg['hidden_size'] = 512
+        cfg['K'] = 16
+        cfg['L'] = 3
+        cfg['affine'] = True
+        cfg['conv_lu'] = True
     return
 
 
@@ -147,26 +196,6 @@ class Stats(object):
         return
 
 
-def process_dataset(dataset):
-    return
-
-
-def make_mode_dataset(dataset):
-    mode_img = []
-    mode_target = []
-    img = np.array(dataset.img)
-    target = np.array(dataset.target[config.PARAM['subset']], dtype=np.int64)
-    for i in range(config.PARAM['classes_size']):
-        img_i = img[target == i]
-        target_i = target[target == i]
-        mode_data_size = len(target_i) if config.PARAM['mode_data_size'] == 0 else config.PARAM['mode_data_size']
-        mode_img.append(img_i[:mode_data_size])
-        mode_target.append(target_i[:mode_data_size])
-    dataset.img = [img for model_img_i in mode_img for img in model_img_i]
-    dataset.target[config.PARAM['subset']] = [target for model_target_i in mode_target for target in model_target_i]
-    return
-
-
 def resume(model, model_tag, optimizer=None, scheduler=None, load_tag='checkpoint', verbose=True):
     if os.path.exists('./output/model/{}_{}.pt'.format(model_tag, load_tag)):
         checkpoint = load('./output/model/{}_{}.pt'.format(model_tag, load_tag))
@@ -181,12 +210,10 @@ def resume(model, model_tag, optimizer=None, scheduler=None, load_tag='checkpoin
             print('Resume from {}'.format(last_epoch))
     else:
         print('Not exists model tag: {}, start from scratch'.format(model_tag))
-        import datetime
+        from datetime import datetime
         from logger import Logger
         last_epoch = 1
-        current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
-        logger_path = 'output/runs/train_{}_{}'.format(config.PARAM['model_tag'], current_time) if config.PARAM[
-            'log_overwrite'] else 'output/runs/train_{}'.format(config.PARAM['model_tag'])
+        logger_path = 'output/runs/train_{}_{}'.format(cfg['model_tag'], datetime.now().strftime('%b%d_%H-%M-%S'))
         logger = Logger(logger_path)
     return last_epoch, model, optimizer, scheduler, logger
 
