@@ -3,7 +3,7 @@
 control: {}
 # data
 data_name: Turb
-subset: Phy
+subset: uvw
 batch_size:
   train: 128
   test: 128
@@ -11,7 +11,7 @@ shuffle:
   train: True
   test: False
 num_workers: 0
-model_name: cascade
+model_name: vqvae
 metric_name:
   train:
     - Loss
@@ -25,14 +25,15 @@ lr: 1e-3
 momentum: 0
 weight_decay: 0
 # scheduler
-scheduler_name: None
+scheduler_name: ReduceLROnPlateau
 step_size: 1
 milestones:
   - 100
   - 150
 patience: 10
-threshold: 1e-3
-factor: 0.5
+threshold: 1.0e-4
+factor: 0.1
+min_lr: 1.0e-5
 # experiment
 init_seed: 0
 num_experiments: 1

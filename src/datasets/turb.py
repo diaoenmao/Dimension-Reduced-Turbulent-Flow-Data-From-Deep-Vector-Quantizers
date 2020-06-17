@@ -2,7 +2,6 @@ import os
 import torch
 import h5py
 import numpy as np
-import joblib
 from torch.utils.data import Dataset
 from utils import check_exists, makedir_exist_ok, save, load
 
@@ -16,15 +15,19 @@ class Turb(Dataset):
         self.subset = subset
         if not check_exists(self.processed_folder):
             self.process()
-        self.input, self.target = joblib.load(os.path.join(self.processed_folder, '{}.pt'.format(self.split)))
+        self.input = load(os.path.join(self.processed_folder, '{}.pt'.format(self.split)))[self.subset]
 
     def __getitem__(self, index):
-        input, target = {s: torch.tensor(self.input[s][index]) for s in self.input}, \
-                        {s: torch.tensor(self.target[s][index]) for s in self.target}
+        input = {}
+        for s in self.input:
+            if isinstance(self.input[s][index], str):
+                input[s] = torch.tensor(load(self.input[s][index]))
+            else:
+                input[s] = torch.tensor(self.input[s][index])
         return input
 
     def __len__(self):
-        return len(self.input['Phy'])
+        return len(self.input['uvw'])
 
     @property
     def processed_folder(self):
@@ -39,8 +42,8 @@ class Turb(Dataset):
             raise ValueError('Not valid dataset')
         train_set, test_set = self.make_data()
         makedir_exist_ok(self.processed_folder)
-        joblib.dump(train_set, os.path.join(self.processed_folder, 'train.pt'))
-        joblib.dump(test_set, os.path.join(self.processed_folder, 'test.pt'))
+        save(train_set, os.path.join(self.processed_folder, 'train.pt'))
+        save(test_set, os.path.join(self.processed_folder, 'test.pt'))
         return
 
     def __repr__(self):
@@ -49,24 +52,43 @@ class Turb(Dataset):
         return fmt_str
 
     def make_data(self):
-        filenames = os.listdir(self.raw_folder)
-        ts = []
-        Phy = []
-        for i in range(len(filenames)):
-            filename_list = filenames[i].split('.')
-            ts_i = int(filename_list[1])
-            f = h5py.File('{}/{}'.format(self.raw_folder, filenames[i]), 'r')
-            Phy_i = [f['Phy_U'][:], f['Phy_V'][:], f['Phy_W'][:]]
-            Phy_i = np.stack(Phy_i, axis=0).astype(np.float32)
-            ts.append(ts_i)
-            Phy.append(Phy_i)
-        num_train = round(len(ts) * 0.8)
-        ts = np.array(ts, dtype=np.long)
-        Phy = np.stack(Phy, axis=0)
-        train_ts, test_ts = ts[:num_train], ts[num_train:]
-        train_Phy, test_Phy = Phy[:num_train], Phy[num_train:]
-        train_input = {'ts': train_ts[:-1], 'Phy': train_Phy[:-1]}
-        train_target = {'ts': train_ts[1:], 'Phy': train_Phy[1:]}
-        test_input = {'ts': test_ts[:-1], 'Phy': test_Phy[:-1]}
-        test_target = {'ts': test_ts[1:], 'Phy': test_Phy[1:]}
-        return (train_input, train_target), (test_input, test_target)
+        sub_folder = 'Data_Re_90_Fr_Inf_Ng_128_Npr_16_AcD_V25'
+        filename_lead = 'V25_Phy_Vel_VelG'
+        Ng, Nb = 128, 16
+        train_ts = np.arange(4050, 5925 + 75, 75).astype(np.int64)
+        test_ts = np.arange(4050, 5925 + 75, 75).astype(np.int64)
+        train_uvw = []
+        for i in range(len(train_ts)):
+            u, v, w = np.zeros((Ng, Ng, Ng)), np.zeros((Ng, Ng, Ng)), np.zeros((Ng, Ng, Ng))
+            for b in range(0, Nb):
+                f = h5py.File(os.path.join(self.raw_folder, sub_folder, '{}.{:06.0f}.h5.{:06.0f}'.format(
+                    filename_lead, train_ts[i], b)), 'r')
+                i_min, i_max = b // 4 * Ng // 4, (b // 4 + 1) * Ng // 4
+                j_min, j_max = (b % 4) * Ng // 4, ((b % 4) + 1) * Ng // 4
+                u[i_min:i_max, j_min:j_max, :] = f['Phy_U'][:]
+                v[i_min:i_max, j_min:j_max, :] = f['Phy_V'][:]
+                w[i_min:i_max, j_min:j_max, :] = f['Phy_W'][:]
+                f.close()
+            uvw = np.stack([u, v, w], axis=0).astype(np.float32)
+            save(uvw, os.path.join(self.raw_folder, '{}.pkl'.format(train_ts[i])))
+            train_uvw.append(os.path.join(self.raw_folder, '{}.pkl'.format(train_ts[i])))
+        test_uvw = []
+        for i in range(len(test_ts)):
+            u, v, w = np.zeros((Ng, Ng, Ng)), np.zeros((Ng, Ng, Ng)), np.zeros((Ng, Ng, Ng))
+            for b in range(0, Nb):
+                f = h5py.File(os.path.join(self.raw_folder, sub_folder, '{}.{:06.0f}.h5.{:06.0f}'.format(
+                    filename_lead, test_ts[i], b)), 'r')
+                i_min, i_max = b // 4 * Ng // 4, (b // 4 + 1) * Ng // 4
+                j_min, j_max = (b % 4) * Ng // 4, ((b % 4) + 1) * Ng // 4
+                u[i_min:i_max, j_min:j_max, :] = f['Phy_U'][:]
+                v[i_min:i_max, j_min:j_max, :] = f['Phy_V'][:]
+                w[i_min:i_max, j_min:j_max, :] = f['Phy_W'][:]
+                f.close()
+            uvw = np.stack([u, v, w], axis=0).astype(np.float32)
+            save(uvw, os.path.join(self.raw_folder, '{}.pkl'.format(test_ts[i])))
+            test_uvw.append(os.path.join(self.raw_folder, '{}.pkl'.format(test_ts[i])))
+        train_uvw_result = {'ts': train_ts[:-1], 'uvw': train_uvw[:-1]}
+        train_nuvw_result = {'ts': train_ts[1:], 'uvw': train_uvw[:-1], 'nuvw': train_uvw[1:]}
+        test_uvw_result = {'ts': test_ts[:-1], 'uvw': test_uvw[:-1]}
+        test_nuvw_result = {'ts': test_ts[1:], 'uvw': test_uvw[:-1], 'nuvw': test_uvw[1:]}
+        return {'uvw': train_uvw_result, 'nuvw': train_nuvw_result}, {'uvw': test_uvw_result, 'nuvw': test_nuvw_result}

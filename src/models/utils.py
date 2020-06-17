@@ -1,5 +1,3 @@
-import config
-import torch
 import torch.nn as nn
 from modules import make_cell
 

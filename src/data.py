@@ -1,8 +1,8 @@
-import config
 import torch
 import datasets
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
+from config import cfg
 
 
 def fetch_dataset(data_name, subset):
@@ -32,7 +32,7 @@ def input_collate(batch):
 def make_data_loader(dataset):
     data_loader = {}
     for k in dataset:
-        data_loader[k] = torch.utils.data.DataLoader(dataset=dataset[k], shuffle=config.PARAM['shuffle'][k],
-                                                     batch_size=config.PARAM['batch_size'][k], pin_memory=True,
-                                                     num_workers=config.PARAM['num_workers'], collate_fn=input_collate)
+        data_loader[k] = torch.utils.data.DataLoader(dataset=dataset[k], shuffle=cfg['shuffle'][k],
+                                                     batch_size=cfg['batch_size'][k], pin_memory=True,
+                                                     num_workers=cfg['num_workers'], collate_fn=input_collate)
     return data_loader

@@ -1,5 +1,3 @@
-import config
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,8 +21,8 @@ def make_cell(cell_info):
         cell = ConvTranspose3dCell(cell_info)
     elif cell_info['cell'] == 'ResConv3dCell':
         cell = ResConv3dCell(cell_info)
-    elif cell_info['cell'] == 'VectorQuantization':
-        cell = VectorQuantization(cell_info)
+    elif cell_info['cell'] == 'VectorQuantization3dCell':
+        cell = VectorQuantization3dCell(cell_info)
     else:
         raise ValueError('Not valid cell info: {}'.format(cell_info))
     return cell
@@ -49,7 +47,7 @@ def Normalization(mode, size, dim=3):
     return
 
 
-def Activation(mode):
+def Activation(mode, inplace=True):
     if mode == 'none':
         return nn.Identity()
     elif mode == 'tanh':
@@ -57,17 +55,17 @@ def Activation(mode):
     elif mode == 'hardtanh':
         return nn.Hardtanh()
     elif mode == 'relu':
-        return nn.ReLU(inplace=True)
+        return nn.ReLU(inplace=inplace)
     elif mode == 'prelu':
         return nn.PReLU()
     elif mode == 'elu':
-        return nn.ELU(inplace=True)
+        return nn.ELU(inplace=inplace)
     elif mode == 'selu':
-        return nn.SELU(inplace=True)
+        return nn.SELU(inplace=inplace)
     elif mode == 'celu':
-        return nn.CELU(inplace=True)
+        return nn.CELU(inplace=inplace)
     elif mode == 'leakyrelu':
-        return nn.LeakyReLU(0.1, inplace=False)
+        return nn.LeakyReLU(0.2, inplace=inplace)
     elif mode == 'sigmoid':
         return nn.Sigmoid()
     elif mode == 'softmax':
@@ -182,11 +180,11 @@ class ResConv3dCell(nn.Module):
         return output
 
 
-class VectorQuantization(nn.Module):
+class VectorQuantization3dCell(nn.Module):
     def __init__(self, cell_info):
         default_cell_info = {'decay': 0.99, 'eps': 1e-5}
         self.cell_info = {**default_cell_info, **cell_info}
-        super(VectorQuantization, self).__init__()
+        super(VectorQuantization3dCell, self).__init__()
         self.embedding_dim = self.cell_info['embedding_dim']
         self.num_embedding = self.cell_info['num_embedding']
         self.decay = self.cell_info['decay']
@@ -197,7 +195,7 @@ class VectorQuantization(nn.Module):
         self.register_buffer('embedding_avg', embedding.clone())
 
     def forward(self, input):
-        input = input.permute(0, 2, 3, 1).contiguous()
+        input = input.permute(0, 2, 3, 4, 1).contiguous()
         input_shape = input.size()
         flatten = input.view(-1, self.embedding_dim)
         dist = (
@@ -223,7 +221,7 @@ class VectorQuantization(nn.Module):
             self.embedding.data.copy_(embedding_normalized)
         diff = F.mse_loss(quantize.detach(), input)
         quantize = input + (quantize - input).detach()
-        quantize = quantize.permute(0, 3, 1, 2).contiguous()
+        quantize = quantize.permute(0, 4, 1, 2, 3).contiguous()
         return quantize, diff, embedding_ind
 
     def embedding_code(self, embedding_ind):
