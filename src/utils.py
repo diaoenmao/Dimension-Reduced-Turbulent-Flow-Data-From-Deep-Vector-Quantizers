@@ -181,8 +181,9 @@ def collate(input):
     return input
 
 
-def vis(signal, recon_signal, path, i_d_min=5, fontsize=10):
-    fig, ax = plt.subplots(nrows=3, ncols=2, figsize=(5, 5))
+def vis(signal, recon_signal, path, i_d_min=5, fontsize=10, num_bins=1500):
+    import scipy.stats as stats
+    fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(10, 10))
     j_d_min, j_d_max = 0, 128
     k_d_min, k_d_max = 0, 128
     label = ['U', 'V', 'W']
@@ -193,6 +194,27 @@ def vis(signal, recon_signal, path, i_d_min=5, fontsize=10):
                                      k_d_min:k_d_max].squeeze()), ax=ax[i][1], fraction=0.046, pad=0.04)
         ax[i][0].set_title('Original {}'.format(label[i]), fontsize=fontsize)
         ax[i][1].set_title('Reconstructed {}'.format(label[i]), fontsize=fontsize)
+
+        p, x = np.histogram((signal.ravel() - np.mean(signal.ravel())) / np.std(signal.ravel()), density=True,
+                            bins=num_bins)
+        x = x[:-1] + (x[1] - x[0]) / 2
+        p[p == 0] = np.min(p[np.nonzero(p)])
+        y = np.log10(p)
+        ax[i][2].plot(x, y, 'b', lw=2, label='Original {}'.format(label[i]))
+        p, x = np.histogram((recon_signal.ravel() - np.mean(recon_signal.ravel())) / np.std(recon_signal.ravel()),
+                            density=True, bins=num_bins)
+        x = x[:-1] + (x[1] - x[0]) / 2
+        p[p == 0] = np.min(p[np.nonzero(p)])
+        y = np.log10(p)
+        ax[i][2].plot(x, y, 'g', lw=2, label='Reconstructed {}'.format(label[i]))
+        ax[i][2].set_xlim(-6, 6)
+        ax[i][2].set_ylim(-5, 0)
+        ax[i][2].set_xlabel('Normalized Signal', fontsize=fontsize)
+        ax[i][2].set_ylabel('log10(pdf)', fontsize=fontsize)
+        ax[i][2].grid(True)
+        xx = np.linspace(-5, 5, 1000)
+        ax[i][2].plot(xx, np.log10(stats.norm.pdf(xx, 0, 1)), 'r--', label="Gaussian")
+        ax[i][2].legend(fontsize=fontsize)
     plt.tight_layout()
     dir = os.path.dirname(path)
     makedir_exist_ok(dir)
