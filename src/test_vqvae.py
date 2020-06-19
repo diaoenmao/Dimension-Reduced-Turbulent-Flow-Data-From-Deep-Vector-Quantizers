@@ -7,7 +7,7 @@ import models
 from config import cfg
 from data import fetch_dataset, make_data_loader
 from metrics import Metric
-from utils import save, to_device, process_control, process_dataset, resume, collate
+from utils import save, to_device, process_control, process_dataset, resume, collate, vis
 from logger import Logger
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -76,6 +76,7 @@ def test(data_loader, model, logger, epoch):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
+        vis(input['uvw'].cpu().numpy(), output['uvw'].cpu().numpy(), './output/vis/result.png')
     return
 
 

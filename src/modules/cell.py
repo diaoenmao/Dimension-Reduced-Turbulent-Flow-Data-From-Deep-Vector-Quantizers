@@ -39,7 +39,12 @@ def Normalization(mode, size, dim=3):
         elif dim == 3:
             return nn.BatchNorm3d(size)
     elif mode == 'in':
-        return nn.InstanceNorm3d(size)
+        if dim == 1:
+            return nn.InstanceNorm1d(size)
+        elif dim == 2:
+            return nn.InstanceNorm2d(size)
+        elif dim == 3:
+            return nn.InstanceNorm3d(size)
     elif mode == 'ln':
         return nn.LayerNorm(size)
     else:

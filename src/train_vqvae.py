@@ -10,7 +10,7 @@ import torch.optim as optim
 from config import cfg
 from data import fetch_dataset, make_data_loader
 from metrics import Metric
-from utils import save, to_device, process_control, process_dataset, resume, collate
+from utils import save, to_device, process_control, process_dataset, resume, collate, vis
 from logger import Logger
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -28,11 +28,12 @@ if args['control_name']:
 cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
 cfg['pivot_metric'] = 'test/MSE'
 cfg['pivot'] = float('inf')
-cfg['lr'] = 1e-3
+cfg['lr'] = 3e-4
 cfg['weight_decay'] = 0
 if cfg['data_name'] in ['Turb']:
-    cfg['batch_size'] = {'train': 5, 'test': 5}
+    cfg['batch_size'] = {'train': 1, 'test': 1}
 cfg['metric_name'] = {'train': ['Loss', 'MSE'], 'test': ['Loss', 'MSE']}
+cfg['optimizer_name'] = 'Adam'
 cfg['scheduler_name'] = 'ReduceLROnPlateau'
 
 
@@ -142,6 +143,8 @@ def test(data_loader, model, logger, epoch):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
+        if cfg['show']:
+            vis(input['uvw'].cpu().numpy(), output['uvw'].cpu().numpy(), './output/vis/result.png')
     return
 
 

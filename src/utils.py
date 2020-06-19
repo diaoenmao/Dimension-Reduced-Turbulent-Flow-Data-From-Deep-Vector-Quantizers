@@ -5,6 +5,7 @@ import os
 import torch
 from itertools import repeat
 from torchvision.utils import save_image
+from matplotlib import pyplot as plt
 from config import cfg
 
 
@@ -178,3 +179,23 @@ def collate(input):
     for k in input:
         input[k] = torch.stack(input[k], 0)
     return input
+
+
+def vis(signal, recon_signal, path, i_d_min=5, fontsize=10):
+    fig, ax = plt.subplots(nrows=3, ncols=2, figsize=(5, 5))
+    j_d_min, j_d_max = 0, 128
+    k_d_min, k_d_max = 0, 128
+    label = ['U', 'V', 'W']
+    for i in range(3):
+        plt.colorbar(ax[i][0].imshow(signal[0, i, i_d_min:(i_d_min + 1), j_d_min:j_d_max,
+                                     k_d_min:k_d_max].squeeze()), ax=ax[i][0], fraction=0.046, pad=0.04)
+        plt.colorbar(ax[i][1].imshow(recon_signal[0, i, i_d_min:(i_d_min + 1), j_d_min:j_d_max,
+                                     k_d_min:k_d_max].squeeze()), ax=ax[i][1], fraction=0.046, pad=0.04)
+        ax[i][0].set_title('Original {}'.format(label[i]), fontsize=fontsize)
+        ax[i][1].set_title('Reconstructed {}'.format(label[i]), fontsize=fontsize)
+    plt.tight_layout()
+    dir = os.path.dirname(path)
+    makedir_exist_ok(dir)
+    fig.savefig(path, dpi=300, bbox_inches='tight', fontsize=fontsize)
+    plt.close()
+    return
