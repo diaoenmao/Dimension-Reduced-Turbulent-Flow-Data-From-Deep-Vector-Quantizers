@@ -183,6 +183,135 @@ def collate(input):
     return input
 
 
+def FFT_derivative(Phy_Vel, direction='x', Fast=True):
+    kk = np.fft.fftfreq(Phy_Vel.shape[0], 1. / Phy_Vel.shape[0])
+    pre = np.fft.fftn(Phy_Vel)
+    post = np.zeros_like(pre)
+    if Fast == False:
+        if direction == 'x':
+            for i in range(Phy_Vel.shape[0]):
+                for j in range(Phy_Vel.shape[1]):
+                    for k in range(Phy_Vel.shape[2]):
+                        post[k, j, i] = pre[k, j, i] * 1.0j * kk[i]  # no matter if you put kx or ky or kz
+        if direction == 'y':
+            for i in range(Phy_Vel.shape[0]):
+                for j in range(Phy_Vel.shape[1]):
+                    for k in range(Phy_Vel.shape[2]):
+                        post[k, j, i] = pre[k, j, i] * 1.0j * kk[j]  # no matter if you put kx or ky or kz
+        if direction == 'z':
+            for i in range(Phy_Vel.shape[0]):
+                for j in range(Phy_Vel.shape[1]):
+                    for k in range(Phy_Vel.shape[2]):
+                        post[k, j, i] = pre[k, j, i] * 1.0j * kk[k]  # no matter if you put kx or ky or kz
+        output = np.real(np.fft.ifftn(post))
+    else:
+        kxmesh, kymesh, kzmesh = np.meshgrid(kk, kk, kk, indexing='ij');
+        if direction == 'x':
+            output = np.real(np.fft.ifftn(1.0j * np.multiply(pre, kzmesh)))
+        elif direction == 'y':
+            output = np.real(np.fft.ifftn(1.0j * np.multiply(pre, kymesh)))
+        else:  # direction=='z'
+            output = np.real(np.fft.ifftn(1.0j * np.multiply(pre, kxmesh)))
+    return output
+
+
+def Q_R_Calculator_slow(A_2d):
+    A2 = np.matmul(A_2d, A_2d)
+    A3 = np.matmul(A_2d, A2)
+    Q = (-1 / 2) * np.trace(A2)
+    R = (-1 / 3) * np.trace(A3)
+    S = (1 / 2) * (A_2d + A_2d.T)
+    SijSij = np.sum(S * S)  # rotation
+    Rot = (1 / 2) * (A_2d - A_2d.T)
+    RijRij = np.sum(Rot * Rot)
+    return Q, R, SijSij, RijRij
+
+
+def Q_R_Calculator(A11, A12, A13, A21, A22, A23, A31, A32, A33, Fast=True):
+    if Fast == False:
+        ng = A11.shape[0]
+        R_loop = np.zeros_like(A11)
+        Q_loop = np.zeros_like(A11)
+        SijSij_loop = np.zeros_like(A11)
+        RijRij_loop = np.zeros_like(A11)
+        for i in range(0, ng):
+            for j in range(0, ng):
+                for k in range(0, ng):
+                    A_2d_t = np.array([
+                        [A11[i, j, k], A12[i, j, k], A13[i, j, k]],
+                        [A21[i, j, k], A22[i, j, k], A23[i, j, k]],
+                        [A31[i, j, k], A32[i, j, k], A33[i, j, k]]
+                    ])
+                    Q_loop[i, j, k], R_loop[i, j, k], SijSij_loop[i, j, k], RijRij_loop[i, j, k] = Q_R_Calculator_slow(
+                        A_2d_t)
+        return Q_loop, R_loop, SijSij_loop, RijRij_loop
+
+    else:
+        # compute trace of A2=A^2=np.matmul(A,A)
+        trace_A2 = A11 ** 2 + A22 ** 2 + A33 ** 2 + 2 * (A12 * A21 + A13 * A31 + A23 * A32)
+        # compute trace of A3=A^3=np.matmul(A,A2)
+        trace_A3 = A11 * (A11 ** 2 + A12 * A21 + A13 * A31) + \
+                   A22 * (A22 ** 2 + A12 * A21 + A23 * A32) + \
+                   A33 * (A33 ** 2 + A13 * A31 + A23 * A32) + \
+                   A21 * (A11 * A12 + A12 * A22 + A13 * A32) + \
+                   A31 * (A11 * A13 + A12 * A23 + A13 * A33) + \
+                   A12 * (A11 * A21 + A21 * A22 + A23 * A31) + \
+                   A32 * (A13 * A21 + A22 * A23 + A23 * A33) + \
+                   A13 * (A11 * A31 + A21 * A32 + A31 * A33) + \
+                   A23 * (A12 * A31 + A22 * A32 + A32 * A33)
+        S_ijS_ij = ((1 / 2) * (A11 + A11)) ** 2 + ((1 / 2) * (A22 + A22)) ** 2 + ((1 / 2) * (A33 + A33)) ** 2 + \
+                   2 * ((1 / 2) * (A12 + A21)) ** 2 + 2 * ((1 / 2) * (A13 + A31)) ** 2 + 2 * (
+                           (1 / 2) * (A23 + A32)) ** 2
+        R_ijR_ij = 2 * ((1 / 2) * (A12 - A21)) ** 2 + 2 * ((1 / 2) * (A13 - A31)) ** 2 + 2 * (
+                (1 / 2) * (A23 - A32)) ** 2
+        return (-1 / 2) * trace_A2, (-1 / 3) * trace_A3, S_ijS_ij, R_ijR_ij  # Q,R,,S_ijS_ij
+
+
+def plot_PDF_VelocityGrad_DL_Model_DNS(A11_DNS, A12_DNS, A13_DNS, A21_DNS, A22_DNS, A23_DNS, A31_DNS, A32_DNS, A33_DNS,
+                                       A11_Model, A12_Model, A13_Model, A21_Model, A22_Model, A23_Model, A31_Model,
+                                       A32_Model, A33_Model, str_list_var=None, num_bins=int(1000 // 2), path=None):
+    if str_list_var is None:
+        str_list_var = ['dUdx_Phy', 'dUdy_Phy', 'dUdz_Phy', 'dVdx_Phy', 'dVdy_Phy', 'dVdz_Phy', 'dWdx_Phy', 'dWdy_Phy',
+                        'dWdz_Phy']
+    import scipy.stats as stats
+    def replaceZeroes(data):
+        min_nonzero = np.min(data[np.nonzero(data)])
+        data[data == 0] = min_nonzero
+        return data
+
+    list_var_Model = [A11_Model, A12_Model, A13_Model, A21_Model, A22_Model, A23_Model, A31_Model, A32_Model, A33_Model]
+    list_var_DNS = [A11_DNS, A12_DNS, A13_DNS, A21_DNS, A22_DNS, A23_DNS, A31_DNS, A32_DNS, A33_DNS]
+    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(20, 25))
+    fontsize = 15
+    for i, var_Model, var_DNS, var_name in zip(range(9), list_var_Model, list_var_DNS, str_list_var):
+        # Model
+        p, x = np.histogram((var_Model.ravel() - np.mean(var_Model.ravel())) / np.std(var_Model.ravel()), density=True,
+                            bins=num_bins)
+        x = x[:-1] + (x[1] - x[0]) / 2
+        y = np.log10(replaceZeroes(p))
+        axes[i // 3][i % 3].plot(x, y, 'b', lw=2, label=var_name + '_Model')
+        # DNS
+        p, x = np.histogram((var_DNS.ravel() - np.mean(var_DNS.ravel())) / np.std(var_DNS.ravel()), density=True,
+                            bins=num_bins)
+        x = x[:-1] + (x[1] - x[0]) / 2
+        y = np.log10(replaceZeroes(p))
+        axes[i // 3][i % 3].plot(x, y, 'g', lw=2, label=var_name + '_DNS')
+        axes[i // 3][i % 3].set_title("MSE = %.4f" % np.mean((var_DNS - var_Model) ** 2), fontsize=fontsize)
+        axes[i // 3][i % 3].set_xlim(-10, 10)
+        axes[i // 3][i % 3].set_ylim(-5, 0)
+        axes[i // 3][i % 3].set_xlabel("Normalized " + var_name, fontsize=fontsize)
+        axes[i // 3][i % 3].set_ylabel('log10(PDF)', fontsize=fontsize)
+        axes[i // 3][i % 3].grid(True)
+        xx = np.linspace(-5, 5, 1000)
+        axes[i // 3][i % 3].plot(xx, np.log10(stats.norm.pdf(xx, 0, 1)), 'r--', label="Guassian")
+        axes[i // 3][i % 3].legend(fontsize=fontsize)
+    if path is not None:
+        plt.tight_layout()
+        makedir_exist_ok(os.path.dirname(path))
+        fig.savefig(path, dpi=300, bbox_inches='tight', fontsize=fontsize)
+        plt.close()
+
+
 def vis(signal, recon_signal, path, i_d_min=5, fontsize=10, num_bins=1500):
     import scipy.stats as stats
     fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(10, 10))
@@ -196,15 +325,17 @@ def vis(signal, recon_signal, path, i_d_min=5, fontsize=10, num_bins=1500):
                                      k_d_min:k_d_max].squeeze()), ax=ax[i][1], fraction=0.046, pad=0.04)
         ax[i][0].set_title('Original {}'.format(label[i]), fontsize=fontsize)
         ax[i][1].set_title('Reconstructed {}'.format(label[i]), fontsize=fontsize)
-
-        p, x = np.histogram((signal.ravel() - np.mean(signal.ravel())) / np.std(signal.ravel()), density=True,
+        p, x = np.histogram((signal[0, i, :, :, :].ravel() - np.mean(signal[0, i, :, :, :].ravel())) / np.std(
+            signal[0, i, :, :, :].ravel()), density=True,
                             bins=num_bins)
         x = x[:-1] + (x[1] - x[0]) / 2
         p[p == 0] = np.min(p[np.nonzero(p)])
         y = np.log10(p)
         ax[i][2].plot(x, y, 'b', lw=2, label='Original {}'.format(label[i]))
-        p, x = np.histogram((recon_signal.ravel() - np.mean(recon_signal.ravel())) / np.std(recon_signal.ravel()),
-                            density=True, bins=num_bins)
+        p, x = np.histogram(
+            (recon_signal[0, i, :, :, :].ravel() - np.mean(recon_signal[0, i, :, :, :].ravel())) / np.std(
+                recon_signal[0, i, :, :, :].ravel()),
+            density=True, bins=num_bins)
         x = x[:-1] + (x[1] - x[0]) / 2
         p[p == 0] = np.min(p[np.nonzero(p)])
         y = np.log10(p)
@@ -213,13 +344,84 @@ def vis(signal, recon_signal, path, i_d_min=5, fontsize=10, num_bins=1500):
         ax[i][2].set_ylim(-5, 0)
         ax[i][2].set_xlabel('Normalized Signal', fontsize=fontsize)
         ax[i][2].set_ylabel('log10(pdf)', fontsize=fontsize)
+        ax[i][2].set_title("MSE = %.4f" % np.mean((recon_signal[0, i, :, :, :] - signal[0, i, :, :, :]) ** 2),
+                           fontsize=fontsize)
         ax[i][2].grid(True)
         xx = np.linspace(-5, 5, 1000)
         ax[i][2].plot(xx, np.log10(stats.norm.pdf(xx, 0, 1)), 'r--', label="Gaussian")
         ax[i][2].legend(fontsize=fontsize)
     plt.tight_layout()
-    dir = os.path.dirname(path)
-    makedir_exist_ok(dir)
+    makedir_exist_ok(os.path.dirname(path))
     fig.savefig(path, dpi=300, bbox_inches='tight', fontsize=fontsize)
     plt.close()
+    #####
+    # storing the velocity components generated by model
+    DL_model_outputs_DNS = {}
+    for i, name in enumerate(label):
+        DL_model_outputs_DNS[name + '_' + 'Model'] = recon_signal[0, i, :, :, :]
+        DL_model_outputs_DNS[name + '_' + 'DNS'] = signal[0, i, :, :, :]
+    # compute the velocity gradients
+    str_list_var = ['A' + str(i) + str(j) for i in range(1, 3 + 1) for j in range(1, 3 + 1)]
+    directions = 3 * ['x', 'y', 'z']
+    list_var_Vel_name = [bb for a in [3 * [item] for item in ['U', 'V', 'W']] for bb in a]
+    for var_name, deriv_dir, var_vel_name in zip(str_list_var, directions, list_var_Vel_name):
+        # compute derivatives of Model outputs
+        var_vel = DL_model_outputs_DNS[var_vel_name + '_' + 'Model']
+        der = FFT_derivative(var_vel, direction=deriv_dir, Fast=True)
+        DL_model_outputs_DNS[var_name + '_' + 'Model'] = der
+        # compute derivatives of DNS data
+        var_vel = DL_model_outputs_DNS[var_vel_name + '_' + 'DNS']
+        der = FFT_derivative(var_vel, direction=deriv_dir, Fast=True)
+        DL_model_outputs_DNS[var_name + '_' + 'DNS'] = der
+    # compute Q-R model
+    Model_DNS = 'Model'
+    Q_f, R_f, S_ijS_ij_f, R_ijR_ij_f = Q_R_Calculator(DL_model_outputs_DNS['A11' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A12' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A13' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A21' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A22' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A23' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A31' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A32' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A33' + '_' + Model_DNS])
+    DL_model_outputs_DNS['Q' + '_' + Model_DNS] = Q_f
+    DL_model_outputs_DNS['R' + '_' + Model_DNS] = R_f
+    DL_model_outputs_DNS['S_ijS_ij' + '_' + Model_DNS] = S_ijS_ij_f
+    DL_model_outputs_DNS['R_ijR_ij' + '_' + Model_DNS] = R_ijR_ij_f
+    # compute Q-R DNS
+    Model_DNS = 'DNS'
+    Q_f, R_f, S_ijS_ij_f, R_ijR_ij_f = Q_R_Calculator(DL_model_outputs_DNS['A11' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A12' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A13' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A21' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A22' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A23' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A31' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A32' + '_' + Model_DNS],
+                                                      DL_model_outputs_DNS['A33' + '_' + Model_DNS])
+    DL_model_outputs_DNS['Q' + '_' + Model_DNS] = Q_f
+    DL_model_outputs_DNS['R' + '_' + Model_DNS] = R_f
+    DL_model_outputs_DNS['S_ijS_ij' + '_' + Model_DNS] = S_ijS_ij_f
+    DL_model_outputs_DNS['R_ijR_ij' + '_' + Model_DNS] = R_ijR_ij_f
+    # plot PDF of velocity gradients
+    plot_PDF_VelocityGrad_DL_Model_DNS(DL_model_outputs_DNS['A11' + '_' + 'DNS'],
+                                       DL_model_outputs_DNS['A12' + '_' + 'DNS'],
+                                       DL_model_outputs_DNS['A13' + '_' + 'DNS'],
+                                       DL_model_outputs_DNS['A21' + '_' + 'DNS'],
+                                       DL_model_outputs_DNS['A22' + '_' + 'DNS'],
+                                       DL_model_outputs_DNS['A23' + '_' + 'DNS'],
+                                       DL_model_outputs_DNS['A31' + '_' + 'DNS'],
+                                       DL_model_outputs_DNS['A32' + '_' + 'DNS'],
+                                       DL_model_outputs_DNS['A33' + '_' + 'DNS'],
+                                       DL_model_outputs_DNS['A11' + '_' + 'Model'],
+                                       DL_model_outputs_DNS['A12' + '_' + 'Model'],
+                                       DL_model_outputs_DNS['A13' + '_' + 'Model'],
+                                       DL_model_outputs_DNS['A21' + '_' + 'Model'],
+                                       DL_model_outputs_DNS['A22' + '_' + 'Model'],
+                                       DL_model_outputs_DNS['A23' + '_' + 'Model'],
+                                       DL_model_outputs_DNS['A31' + '_' + 'Model'],
+                                       DL_model_outputs_DNS['A32' + '_' + 'Model'],
+                                       DL_model_outputs_DNS['A33' + '_' + 'Model'],
+                                       path=os.path.join(os.path.dirname(path), 'VG_PDF.png'))
+    save(DL_model_outputs_DNS, os.path.join(os.path.dirname(path), 'Dic_DL_model_outputs_DNS.pt'))
     return

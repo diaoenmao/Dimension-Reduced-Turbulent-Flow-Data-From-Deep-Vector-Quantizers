@@ -99,7 +99,7 @@ class VQVAE(nn.Module):
                                       num_res_channel, stride=4)
         self.upsampler_top = nn.ConvTranspose3d(embedding_dim, embedding_dim, 4, 2, 1)
         self.encoder_top = Encoder(channel, channel, num_res_block, num_res_channel, stride=2)
-        self.encoder_conv_top = Conv(channel, embedding_dim, 1)
+        self.encoder_conv_top = Conv(channel, embedding_dim, 1, 1, 0)
         self.quantizer_top = VectorQuantization3d(embedding_dim, num_embedding)
         self.decoder_top = Decoder(embedding_dim, embedding_dim, channel, num_res_block, num_res_channel, stride=2)
 
