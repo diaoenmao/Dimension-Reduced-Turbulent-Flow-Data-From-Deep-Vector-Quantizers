@@ -104,8 +104,10 @@ def process_control():
     if cfg['data_name'] in ['Turb']:
         cfg['data_shape'] = [3, 128, 128, 128]
     if cfg['data_name'] in ['Turb']:
-        cfg['hidden_size'] = [64, 128, 256]
-        cfg['quantizer_embedding_size'] = 128
+        cfg['hidden_size'] = 128
+        cfg['num_res_block'] = 2
+        cfg['num_res_channel'] = 32
+        cfg['embedding_dim'] = 64
         cfg['num_embedding'] = 512
         cfg['vq_commit'] = 0.25
     return
@@ -115,7 +117,7 @@ def make_stats(dataset):
     if os.path.exists('./data/stats/{}.pt'.format(dataset.data_name)):
         stats = load('./data/stats/{}.pt'.format(dataset.data_name))
     elif dataset is not None:
-        data_loader = torch.utils.data.DataLoader(dataset, batch_size=100, shuffle=False, num_workers=0)
+        data_loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False, num_workers=0)
         stats = Stats(dim=1)
         with torch.no_grad():
             for input in data_loader:
