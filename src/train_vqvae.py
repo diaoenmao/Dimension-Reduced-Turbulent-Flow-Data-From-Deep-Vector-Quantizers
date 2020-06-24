@@ -35,7 +35,7 @@ cfg['optimizer_name'] = 'Adam'
 cfg['lr'] = 3e-4
 cfg['weight_decay'] = 1e-5
 cfg['scheduler_name'] = 'ReduceLROnPlateau'
-cfg['show'] = True
+cfg['show'] = False
 
 
 def main():

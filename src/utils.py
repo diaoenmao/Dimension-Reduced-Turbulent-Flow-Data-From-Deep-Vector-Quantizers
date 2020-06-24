@@ -105,9 +105,10 @@ def process_control():
         cfg['data_shape'] = [3, 128, 128, 128]
     if cfg['data_name'] in ['Turb']:
         cfg['hidden_size'] = 128
+        cfg['depth'] = 3
         cfg['num_res_block'] = 2
-        cfg['num_res_channel'] = 32
-        cfg['embedding_dim'] = 64
+        cfg['res_size'] = 32
+        cfg['embedding_size'] = 64
         cfg['num_embedding'] = 512
         cfg['vq_commit'] = 0.25
     return

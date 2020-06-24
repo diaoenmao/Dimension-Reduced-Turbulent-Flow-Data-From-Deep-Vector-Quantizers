@@ -11,15 +11,15 @@ Conv = nn.Conv3d
 
 
 class ResBlock(nn.Module):
-    def __init__(self, in_channel, channel):
+    def __init__(self, hidden_size, res_size):
         super().__init__()
         self.conv = nn.Sequential(
-            Normalization(in_channel),
+            Normalization(hidden_size),
             Activation(inplace=True),
-            Conv(in_channel, channel, 3, 1, 1),
-            Normalization(channel),
+            Conv(hidden_size, res_size, 3, 1, 1),
+            Normalization(res_size),
             Activation(inplace=True),
-            Conv(channel, in_channel, 1, 1, 0),
+            Conv(res_size, hidden_size, 3, 1, 1),
         )
 
     def forward(self, input):
@@ -28,110 +28,142 @@ class ResBlock(nn.Module):
         return out
 
 
-class Encoder(nn.Module):
-    def __init__(self, in_channel, channel, num_res_block, num_res_channel, stride):
+class DownBlock(nn.Module):
+    def __init__(self, hidden_size):
         super().__init__()
-        if stride == 4:
-            blocks = [
-                Conv(in_channel, channel // 2, 4, 2, 1),
-                Normalization(channel // 2),
-                Activation(inplace=True),
-                Conv(channel // 2, channel, 4, 2, 1),
-                Normalization(channel),
-                Activation(inplace=True),
-                Conv(channel, channel, 3, 1, 1),
-            ]
-        elif stride == 2:
-            blocks = [
-                Conv(in_channel, channel // 2, 4, 2, 1),
-                Normalization(channel // 2),
-                Activation(inplace=True),
-                Conv(channel // 2, channel, 3, 1, 1),
-            ]
-        else:
-            raise ValueError('Not valid stride')
-        for i in range(num_res_block):
-            blocks.append(ResBlock(channel, num_res_channel))
-        blocks.extend([
-            Normalization(channel),
-            Activation(inplace=True)])
-        self.blocks = nn.Sequential(*blocks)
+        self.down = nn.Sequential(
+            Normalization(hidden_size),
+            Activation(inplace=True),
+            Conv(hidden_size, hidden_size, 4, 2, 1),
+        )
 
     def forward(self, input):
-        return self.blocks(input)
+        out = self.down(input)
+        return out
+
+
+class UpBlock(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.up = nn.Sequential(
+            Normalization(hidden_size),
+            Activation(inplace=True),
+            nn.ConvTranspose3d(hidden_size, hidden_size, 4, 2, 1),
+        )
+
+    def forward(self, input):
+        out = self.up(input)
+        return out
+
+
+class Encoder(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layer, num_res_block, res_size, embedding_size, num_embedding):
+        super().__init__()
+        self.conv_in = Conv(input_size, hidden_size, 3, 1, 1)
+        self.num_layer = num_layer
+        self.down = nn.ModuleList([])
+        self.res_blocks_down = nn.ModuleList([])
+        self.conv_down = nn.ModuleList([])
+        self.quantizer = nn.ModuleList([])
+        self.up = nn.ModuleList([])
+        self.res_blocks_up = nn.ModuleList([])
+        self.conv_up = nn.ModuleList([])
+        for i in range(num_layer):
+            for _ in range(num_res_block):
+                self.res_blocks_down.append(ResBlock(hidden_size, res_size))
+            if i < num_layer - 1:
+                self.down.append(DownBlock(hidden_size))
+                self.conv_down.append(nn.Sequential(Normalization(hidden_size),
+                                                    Activation(inplace=True),
+                                                    Conv(hidden_size + embedding_size, embedding_size, 3, 1, 1)))
+            else:
+                self.conv_down.append(nn.Sequential(Normalization(hidden_size),
+                                                    Activation(inplace=True),
+                                                    Conv(hidden_size, embedding_size, 3, 1, 1)))
+            if i > 0:
+                self.conv_up.append(Conv(embedding_size, hidden_size, 3, 1, 1))
+                for _ in range(num_res_block):
+                    self.res_blocks_up.append(ResBlock(hidden_size, res_size))
+                self.up.append(UpBlock(hidden_size))
+            self.quantizer.append(VectorQuantization3d(embedding_size, num_embedding))
+
+    def decode(self, code):
+        encoded = []
+        for i in range(self.num_layer):
+            encoded.append(self.quantizer[i].embedding_code(code[i]).permute(0, 4, 1, 2, 3))
+        return encoded
+
+    def forward(self, input):
+        x = self.conv_in(input)
+        res_down = [None for _ in range(self.num_layer)]
+        encoded = [None for _ in range(self.num_layer)]
+        diff = [None for _ in range(self.num_layer)]
+        code = [None for _ in range(self.num_layer)]
+        for i in range(self.num_layer):
+            res_down[i] = self.res_blocks_down[i](x)
+            if i < self.num_layer - 1:
+                x = self.down[i](res_down[i])
+        for i in range(self.num_layer, 0, -1):
+            if i < self.num_layer - 1:
+                x = self.conv_merge[i](torch.cat([res_down[i], res_up], dim=1))
+            else:
+                x = res_down[i]
+            encoded[i], diff[i], code[i] = self.quantizer[i](x)
+            if i > 0:
+                res_up = self.up[i](self.res_blocks_up[i](self.conv_up[i](encoded[i])))
+        return encoded, diff, code
 
 
 class Decoder(nn.Module):
-    def __init__(self, in_channel, out_channel, channel, num_res_block, num_res_channel, stride):
+    def __init__(self, input_size, hidden_size, output_size, num_res_block, res_size):
         super().__init__()
-        blocks = [Conv(in_channel, channel, 3, 1, 1)]
-        for i in range(num_res_block):
-            blocks.append(ResBlock(channel, num_res_channel))
-        blocks.extend([
-            Normalization(channel),
-            Activation(inplace=True)])
-        if stride == 4:
-            blocks.extend([
-                nn.ConvTranspose3d(channel, channel // 2, 4, 2, 1),
-                Normalization(channel // 2),
-                Activation(inplace=True),
-                nn.ConvTranspose3d(channel // 2, out_channel, 4, 2, 1),
-            ])
-        elif stride == 2:
-            blocks.append(
-                nn.ConvTranspose3d(channel, out_channel, 4, 2, 1)
-            )
-        self.blocks = nn.Sequential(*blocks)
+        self.conv_merge = Conv(input_size, hidden_size, 3, 1, 1)
+        self.res_blocks = nn.ModuleList([])
+        for _ in range(num_res_block):
+            self.res_blocks.append(ResBlock(hidden_size, res_size))
+        self.conv_out = Conv(hidden_size, output_size, 3, 1, 1)
 
     def forward(self, input):
-        return self.blocks(input)
+        x = self.conv_merge(torch.cat(input, dim=1))
+        x = self.res_blocks(x)
+        decoded = self.conv_out(x)
+        return decoded
 
 
 class VQVAE(nn.Module):
-    def __init__(self, in_channel=3, channel=128, num_res_block=2, num_res_channel=32, embedding_dim=64,
+    def __init__(self, input_size=3, hidden_size=32, depth=3, num_res_block=2, res_size=32, embedding_size=64,
                  num_embedding=512, vq_commit=0.25):
         super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.depth = depth
+        self.num_res_block = num_res_block
+        self.res_size = res_size
+        self.embedding_size = embedding_size
+        self.num_embedding = num_embedding
         self.vq_commit = vq_commit
-        self.encoder_bottom = Encoder(in_channel, channel, num_res_block, num_res_channel, stride=4)
-        self.encoder_conv_bottom = Conv(embedding_dim + channel, embedding_dim, 1, 1, 0)
-        self.quantizer_bottom = VectorQuantization3d(embedding_dim, num_embedding)
-        self.decoder_bottom = Decoder(embedding_dim + embedding_dim, in_channel, channel, num_res_block,
-                                      num_res_channel, stride=4)
-        self.upsampler_top = nn.ConvTranspose3d(embedding_dim, embedding_dim, 4, 2, 1)
-        self.encoder_top = Encoder(channel, channel, num_res_block, num_res_channel, stride=2)
-        self.encoder_conv_top = Conv(channel, embedding_dim, 1, 1, 0)
-        self.quantizer_top = VectorQuantization3d(embedding_dim, num_embedding)
-        self.decoder_top = Decoder(embedding_dim, embedding_dim, channel, num_res_block, num_res_channel, stride=2)
+        self.encoder = Encoder(input_size, hidden_size, depth, num_res_block, res_size, embedding_size, num_embedding)
+        self.decoder = Decoder(embedding_size * depth, hidden_size, input_size, num_res_block, res_size)
 
     def encode(self, input):
-        encoded_bottom = self.encoder_bottom(input)
-        encoded_top = self.encoder_top(encoded_bottom)
-        encoded_top = self.encoder_conv_top(encoded_top)
-        quantized_top, diff_top, idx_top = self.quantizer_top(encoded_top)
-        decoded_top = self.decoder_top(quantized_top)
-        encoded_bottom = torch.cat([decoded_top, encoded_bottom], dim=1)
-        encoded_bottom = self.encoder_conv_bottom(encoded_bottom)
-        quantized_bottom, diff_bottom, idx_bottom = self.quantizer_bottom(encoded_bottom)
-        diff = (diff_top + diff_bottom) / 2
-        return quantized_top, quantized_bottom, diff, idx_top, idx_bottom
+        encoded, diff, code = self.encoder(input)
+        return encoded, diff, code
 
-    def decode(self, quantized_top, quantized_bottom):
-        upsampled_top = self.upsampler_top(quantized_top)
-        quantized = torch.cat([upsampled_top, quantized_bottom], dim=1)
-        decoded = self.decoder_bottom(quantized)
+    def decode(self, encoded):
+        decoded = self.decoder(encoded)
         return decoded
 
-    def decode_code(self, code_top, code_bottom):
-        quantized_top = self.quantizer_top.embedding_code(code_top).permute(0, 4, 1, 2, 3)
-        quantized_bottom = self.quantize_b.embedding_code(code_bottom).permute(0, 4, 1, 2, 3)
-        decoded = self.decode(quantized_top, quantized_bottom)
+    def decode(self, code):
+        encoded = self.encoder.decode(code)
+        decoded = self.decode(encoded)
         return decoded
 
     def forward(self, input):
         output = {'loss': torch.tensor(0, device=cfg['device'], dtype=torch.float32)}
         x = input['uvw']
-        quant_top, quant_bottom, vq_loss, output['idx_top'], output['idx_bottom'] = self.encode(x)
-        decoded = self.decode(quant_top, quant_bottom)
+        encoded, diff, output['code'] = self.encode(x)
+        vq_loss = sum(diff) / len(diff)
+        decoded = self.decode(encoded)
         output['uvw'] = decoded
         output['loss'] = F.mse_loss(decoded, input['uvw']) + self.vq_commit * vq_loss
         return output
@@ -140,13 +172,13 @@ class VQVAE(nn.Module):
 def vqvae():
     data_shape = cfg['data_shape']
     hidden_size = cfg['hidden_size']
+    depth = cfg['depth']
     num_res_block = cfg['num_res_block']
-    num_res_channel = cfg['num_res_channel']
-    embedding_dim = cfg['embedding_dim']
+    res_size = cfg['res_size']
+    embedding_size = cfg['embedding_size']
     num_embedding = cfg['num_embedding']
     vq_commit = cfg['vq_commit']
-    model = VQVAE(in_channel=data_shape[0], channel=hidden_size, num_res_block=num_res_block,
-                  num_res_channel=num_res_channel, embedding_dim=embedding_dim, num_embedding=num_embedding,
-                  vq_commit=vq_commit)
+    model = VQVAE(input_size=data_shape[0], hidden_size=hidden_size, depth=depth, num_res_block=num_res_block,
+                  res_size=res_size, embedding_size=embedding_size, num_embedding=num_embedding, vq_commit=vq_commit)
     model.apply(init_param)
     return model
