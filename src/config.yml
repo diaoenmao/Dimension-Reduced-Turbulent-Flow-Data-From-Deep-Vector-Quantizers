@@ -1,6 +1,7 @@
 ---
 # control
-control: {}
+control:
+  depth: '6'
 # data
 data_name: Turb
 subset: uvw

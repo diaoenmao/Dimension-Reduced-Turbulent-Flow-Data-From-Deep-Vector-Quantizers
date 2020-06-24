@@ -101,6 +101,7 @@ def process_dataset(dataset):
 
 
 def process_control():
+    cfg['depth'] = int(cfg['control']['depth'])
     if cfg['data_name'] in ['Turb']:
         cfg['data_shape'] = [3, 128, 128, 128]
     if cfg['data_name'] in ['Turb']:

@@ -88,7 +88,7 @@ class Decoder(nn.Module):
 
 
 class VQVAE(nn.Module):
-    def __init__(self, input_size=3, hidden_size=128, depth=5, num_res_block=2, res_size=32, embedding_size=64,
+    def __init__(self, input_size=3, hidden_size=128, depth=3, num_res_block=2, res_size=32, embedding_size=64,
                  num_embedding=512, vq_commit=0.25):
         super().__init__()
         self.upsampler, self.encoder, self.encoder_conv, self.quantizer, self.decoder = [], [], [], [], []
@@ -96,7 +96,10 @@ class VQVAE(nn.Module):
             if i == 0:
                 self.upsampler.append(None)
                 self.encoder.append(Encoder(input_size, hidden_size, num_res_block, res_size, stride=2))
-                self.encoder_conv.append(Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0))
+                if depth > 1:
+                    self.encoder_conv.append(Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0))
+                else:
+                    self.encoder_conv.append(Conv(hidden_size, embedding_size, 1, 1, 0))
                 self.quantizer.append(VectorQuantization3d(embedding_size, num_embedding))
                 self.decoder.append(Decoder(embedding_size * depth, input_size, hidden_size,
                                             num_res_block, res_size, stride=2))
@@ -170,12 +173,13 @@ class VQVAE(nn.Module):
 def vqvae():
     data_shape = cfg['data_shape']
     hidden_size = cfg['hidden_size']
+    depth = cfg['depth']
     num_res_block = cfg['num_res_block']
     res_size = cfg['res_size']
     embedding_size = cfg['embedding_size']
     num_embedding = cfg['num_embedding']
     vq_commit = cfg['vq_commit']
-    model = VQVAE(input_size=data_shape[0], hidden_size=hidden_size, num_res_block=num_res_block,
+    model = VQVAE(input_size=data_shape[0], hidden_size=hidden_size, depth=depth, num_res_block=num_res_block,
                   res_size=res_size, embedding_size=embedding_size, num_embedding=num_embedding,
                   vq_commit=vq_commit)
     model.apply(init_param)
