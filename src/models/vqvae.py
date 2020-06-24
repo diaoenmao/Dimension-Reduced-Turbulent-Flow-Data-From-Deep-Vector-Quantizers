@@ -88,54 +88,63 @@ class Decoder(nn.Module):
 
 
 class VQVAE(nn.Module):
-    def __init__(self, input_size=3, hidden_size=128, num_res_block=2, res_size=32, embedding_size=64,
+    def __init__(self, input_size=3, hidden_size=128, depth=5, num_res_block=2, res_size=32, embedding_size=64,
                  num_embedding=512, vq_commit=0.25):
         super().__init__()
-        self.encoder_bottom = Encoder(input_size, hidden_size, num_res_block, res_size, stride=2)
-        self.encoder_conv_bottom = Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0)
-        self.quantizer_bottom = VectorQuantization3d(embedding_size, num_embedding)
-        self.decoder_bottom = Decoder(embedding_size * 3, input_size, hidden_size, num_res_block, res_size, stride=2)
-
-        self.upsampler_mid = nn.ConvTranspose3d(embedding_size, embedding_size, 4, 2, 1)
-        self.encoder_mid = Encoder(hidden_size, hidden_size, num_res_block, res_size, stride=2)
-        self.encoder_conv_mid = Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0)
-        self.quantizer_mid = VectorQuantization3d(embedding_size, num_embedding)
-        self.decoder_mid = Decoder(embedding_size, embedding_size, hidden_size, num_res_block, res_size, stride=2)
-
-        self.upsampler_top = nn.ConvTranspose3d(embedding_size, embedding_size, 4, 2, 1)
-        self.encoder_top = Encoder(hidden_size, hidden_size, num_res_block, res_size, stride=2)
-        self.encoder_conv_top = Conv(hidden_size, embedding_size, 1, 1, 0)
-        self.quantizer_top = VectorQuantization3d(embedding_size, num_embedding)
-        self.decoder_top = Decoder(embedding_size, embedding_size, hidden_size, num_res_block, res_size, stride=2)
+        self.upsampler, self.encoder, self.encoder_conv, self.quantizer, self.decoder = [], [], [], [], []
+        for i in range(depth):
+            if i == 0:
+                self.upsampler.append(None)
+                self.encoder.append(Encoder(input_size, hidden_size, num_res_block, res_size, stride=2))
+                self.encoder_conv.append(Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0))
+                self.quantizer.append(VectorQuantization3d(embedding_size, num_embedding))
+                self.decoder.append(Decoder(embedding_size * depth, input_size, hidden_size,
+                                            num_res_block, res_size, stride=2))
+            else:
+                self.upsampler.append(nn.ConvTranspose3d(embedding_size, embedding_size, 4, 2, 1))
+                self.encoder.append(Encoder(hidden_size, hidden_size, num_res_block, res_size, stride=2))
+                if i == depth - 1:
+                    self.encoder_conv.append(Conv(hidden_size, embedding_size, 1, 1, 0))
+                else:
+                    self.encoder_conv.append(Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0))
+                self.quantizer.append(VectorQuantization3d(embedding_size, num_embedding))
+                self.decoder.append(Decoder(embedding_size, embedding_size, hidden_size,
+                                            num_res_block, res_size, stride=2))
+        self.upsampler = nn.ModuleList(self.upsampler)
+        self.encoder = nn.ModuleList(self.encoder)
+        self.encoder_conv = nn.ModuleList(self.encoder_conv)
+        self.quantizer = nn.ModuleList(self.quantizer)
+        self.decoder = nn.ModuleList(self.decoder)
+        self.depth = depth
         self.vq_commit = vq_commit
 
     def encode(self, input):
-        encoded_bottom = self.encoder_bottom(input)
-        encoded_mid = self.encoder_mid(encoded_bottom)
-        encoded_top = self.encoder_top(encoded_mid)
-
-        encoded_top = self.encoder_conv_top(encoded_top)
-        quantized_top, diff_top, idx_top = self.quantizer_top(encoded_top)
-        decoded_top = self.decoder_top(quantized_top)
-
-        encoded_mid = torch.cat([decoded_top, encoded_mid], dim=1)
-        encoded_mid = self.encoder_conv_mid(encoded_mid)
-        quantized_mid, diff_mid, idx_mid = self.quantizer_mid(encoded_mid)
-        decoded_mid = self.decoder_mid(quantized_mid)
-
-        encoded_bottom = torch.cat([decoded_mid, encoded_bottom], dim=1)
-        encoded_bottom = self.encoder_conv_bottom(encoded_bottom)
-        quantized_bottom, diff_bottom, idx_bottom = self.quantizer_bottom(encoded_bottom)
-        return (quantized_top, quantized_mid, quantized_bottom), \
-               (diff_top, diff_mid, diff_bottom), (idx_top, idx_mid, idx_bottom)
+        encoded = [None for _ in range(self.depth)]
+        quantized = [None for _ in range(self.depth)]
+        diff = [None for _ in range(self.depth)]
+        code = [None for _ in range(self.depth)]
+        decoded = [None for _ in range(self.depth)]
+        x = input
+        for i in range(self.depth):
+            encoded[i] = self.encoder[i](x)
+            x = encoded[i]
+        for i in range(self.depth - 1, -1, -1):
+            if i < self.depth - 1:
+                encoded[i] = torch.cat([decoded[i + 1], encoded[i]], dim=1)
+            encoded[i] = self.encoder_conv[i](encoded[i])
+            quantized[i], diff[i], code[i] = self.quantizer[i](encoded[i])
+            if i > 0:
+                decoded[i] = self.decoder[i](quantized[i])
+        return quantized, diff, code
 
     def decode(self, quantized):
-        quantized_top, quantized_mid, quantized_bottom = quantized
-        upsampled_top = self.upsampler_top(quantized_top)
-        upsampled_top = self.upsampler_mid(upsampled_top)
-        upsampled_mid = self.upsampler_mid(quantized_mid)
-        quantized = torch.cat([upsampled_top, upsampled_mid, quantized_bottom], dim=1)
-        decoded = self.decoder_bottom(quantized)
+        upsampled = [None for _ in range(self.depth)]
+        for i in range(self.depth - 1, -1, -1):
+            upsampled[i] = quantized[i]
+            for j in range(i, 0, -1):
+                upsampled[i] = self.upsampler[j](upsampled[i])
+        upsampled = torch.cat(upsampled, dim=1)
+        decoded = self.decoder[0](upsampled)
         return decoded
 
     def decode_code(self, code):
