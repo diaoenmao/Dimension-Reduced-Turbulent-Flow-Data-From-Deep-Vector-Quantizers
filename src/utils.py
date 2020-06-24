@@ -105,7 +105,6 @@ def process_control():
         cfg['data_shape'] = [3, 128, 128, 128]
     if cfg['data_name'] in ['Turb']:
         cfg['hidden_size'] = 128
-        cfg['depth'] = 3
         cfg['num_res_block'] = 2
         cfg['res_size'] = 32
         cfg['embedding_size'] = 64
@@ -304,7 +303,7 @@ def plot_PDF_VelocityGrad_DL_Model_DNS(A11_DNS, A12_DNS, A13_DNS, A21_DNS, A22_D
         axes[i // 3][i % 3].set_ylabel('log10(PDF)', fontsize=fontsize)
         axes[i // 3][i % 3].grid(True)
         xx = np.linspace(-5, 5, 1000)
-        axes[i // 3][i % 3].plot(xx, np.log10(stats.norm.pdf(xx, 0, 1)), 'r--', label="Guassian")
+        axes[i // 3][i % 3].plot(xx, np.log10(stats.norm.pdf(xx, 0, 1)), 'r--', label="Gaussian")
         axes[i // 3][i % 3].legend(fontsize=fontsize)
     if path is not None:
         plt.tight_layout()
