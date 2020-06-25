@@ -76,7 +76,7 @@ def test(data_loader, model, logger, epoch):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
-        vis(input['uvw'].cpu().numpy(), output['uvw'].cpu().numpy(), './output/vis/result.png')
+        vis(input['uvw'].cpu().numpy(), output['uvw'].cpu().numpy(), './output/vis')
     return
 
 

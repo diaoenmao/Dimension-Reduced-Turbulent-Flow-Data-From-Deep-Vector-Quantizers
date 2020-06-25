@@ -145,7 +145,7 @@ def test(data_loader, model, logger, epoch):
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
         if cfg['show']:
-            vis(input['uvw'].cpu().numpy(), output['uvw'].cpu().numpy(), './output/vis/result.png')
+            vis(input['uvw'].cpu().numpy(), output['uvw'].cpu().numpy(), './output/vis')
     return
 
 
