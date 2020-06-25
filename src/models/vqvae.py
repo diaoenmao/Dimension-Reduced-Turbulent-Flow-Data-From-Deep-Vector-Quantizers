@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from config import cfg
-from modules import VectorQuantization3d
+from modules import VectorQuantization
 from .utils import init_param
 
 Normalization = nn.BatchNorm3d
@@ -100,7 +100,7 @@ class VQVAE(nn.Module):
                     self.encoder_conv.append(Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0))
                 else:
                     self.encoder_conv.append(Conv(hidden_size, embedding_size, 1, 1, 0))
-                self.quantizer.append(VectorQuantization3d(embedding_size, num_embedding))
+                self.quantizer.append(VectorQuantization(embedding_size, num_embedding))
                 self.decoder.append(Decoder(embedding_size * depth, input_size, hidden_size,
                                             num_res_block, res_size, stride=2))
             else:
@@ -110,7 +110,7 @@ class VQVAE(nn.Module):
                     self.encoder_conv.append(Conv(hidden_size, embedding_size, 1, 1, 0))
                 else:
                     self.encoder_conv.append(Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0))
-                self.quantizer.append(VectorQuantization3d(embedding_size, num_embedding))
+                self.quantizer.append(VectorQuantization(embedding_size, num_embedding))
                 self.decoder.append(Decoder(embedding_size, embedding_size, hidden_size,
                                             num_res_block, res_size, stride=2))
         self.upsampler = nn.ModuleList(self.upsampler)

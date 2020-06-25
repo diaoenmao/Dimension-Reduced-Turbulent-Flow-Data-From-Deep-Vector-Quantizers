@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class VectorQuantization3d(nn.Module):
+class VectorQuantization(nn.Module):
     def __init__(self, embedding_size, num_embedding, decay=0.99, eps=1e-5):
-        super(VectorQuantization3d, self).__init__()
+        super(VectorQuantization, self).__init__()
         self.embedding_size = embedding_size
         self.num_embedding = num_embedding
         self.decay = decay
@@ -16,7 +16,7 @@ class VectorQuantization3d(nn.Module):
         self.register_buffer('embedding_mean', embedding.clone())
 
     def forward(self, input):
-        input = input.permute(0, 2, 3, 4, 1).contiguous()
+        input = input.transpose(1, -1).contiguous()
         flatten = input.view(-1, self.embedding_size)
         dist = (
                 flatten.pow(2).sum(1, keepdim=True)
@@ -41,7 +41,7 @@ class VectorQuantization3d(nn.Module):
             self.embedding.data.copy_(embedding_normalized)
         diff = F.mse_loss(quantize.detach(), input)
         quantize = input + (quantize - input).detach()
-        quantize = quantize.permute(0, 4, 1, 2, 3).contiguous()
+        quantize = quantize.transpose(1, -1).contiguous()
         return quantize, diff, embedding_ind
 
     def embedding_code(self, embedding_ind):
