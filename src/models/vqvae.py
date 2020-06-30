@@ -7,7 +7,6 @@ from .utils import init_param
 
 Normalization = nn.BatchNorm3d
 Activation = nn.ReLU
-Conv = nn.Conv3d
 
 
 class ResBlock(nn.Module):
@@ -16,10 +15,10 @@ class ResBlock(nn.Module):
         self.conv = nn.Sequential(
             Normalization(hidden_size),
             Activation(inplace=True),
-            Conv(hidden_size, res_size, 3, 1, 1),
+            nn.Conv3d(hidden_size, res_size, 3, 1, 1),
             Normalization(res_size),
             Activation(inplace=True),
-            Conv(res_size, hidden_size, 3, 1, 1),
+            nn.Conv3d(res_size, hidden_size, 3, 1, 1),
         )
 
     def forward(self, input):
@@ -33,20 +32,20 @@ class Encoder(nn.Module):
         super().__init__()
         if stride == 4:
             blocks = [
-                Conv(input_size, hidden_size // 2, 4, 2, 1),
+                nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
                 Normalization(hidden_size // 2),
                 Activation(inplace=True),
-                Conv(hidden_size // 2, hidden_size, 4, 2, 1),
+                nn.Conv3d(hidden_size // 2, hidden_size, 4, 2, 1),
                 Normalization(hidden_size),
                 Activation(inplace=True),
-                Conv(hidden_size, hidden_size, 3, 1, 1),
+                nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
             ]
         elif stride == 2:
             blocks = [
-                Conv(input_size, hidden_size // 2, 4, 2, 1),
+                nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
                 Normalization(hidden_size // 2),
                 Activation(inplace=True),
-                Conv(hidden_size // 2, hidden_size, 3, 1, 1),
+                nn.Conv3d(hidden_size // 2, hidden_size, 3, 1, 1),
             ]
         else:
             raise ValueError('Not valid stride')
@@ -64,23 +63,24 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, input_size, output_size, hidden_size, num_res_block, res_size, stride):
         super().__init__()
-        blocks = [Conv(input_size, hidden_size, 3, 1, 1)]
+        blocks = [nn.Conv3d(input_size, hidden_size, 3, 1, 1)]
         for i in range(num_res_block):
             blocks.append(ResBlock(hidden_size, res_size))
-        blocks.extend([
-            Normalization(hidden_size),
-            Activation(inplace=True)])
         if stride == 4:
             blocks.extend([
+                Normalization(hidden_size),
+                Activation(inplace=True),
                 nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
                 Normalization(hidden_size // 2),
                 Activation(inplace=True),
                 nn.ConvTranspose3d(hidden_size // 2, output_size, 4, 2, 1),
             ])
         elif stride == 2:
-            blocks.append(
+            blocks.extend([
+                Normalization(hidden_size),
+                Activation(inplace=True),
                 nn.ConvTranspose3d(hidden_size, output_size, 4, 2, 1)
-            )
+            ])
         self.blocks = nn.Sequential(*blocks)
 
     def forward(self, input):
@@ -97,9 +97,9 @@ class VQVAE(nn.Module):
                 self.upsampler.append(None)
                 self.encoder.append(Encoder(input_size, hidden_size, num_res_block, res_size, stride=2))
                 if depth > 1:
-                    self.encoder_conv.append(Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0))
+                    self.encoder_conv.append(nn.Conv3d(hidden_size + embedding_size, embedding_size, 1, 1, 0))
                 else:
-                    self.encoder_conv.append(Conv(hidden_size, embedding_size, 1, 1, 0))
+                    self.encoder_conv.append(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0))
                 self.quantizer.append(VectorQuantization(embedding_size, num_embedding))
                 self.decoder.append(Decoder(embedding_size * depth, input_size, hidden_size,
                                             num_res_block, res_size, stride=2))
@@ -107,9 +107,9 @@ class VQVAE(nn.Module):
                 self.upsampler.append(nn.ConvTranspose3d(embedding_size, embedding_size, 4, 2, 1))
                 self.encoder.append(Encoder(hidden_size, hidden_size, num_res_block, res_size, stride=2))
                 if i == depth - 1:
-                    self.encoder_conv.append(Conv(hidden_size, embedding_size, 1, 1, 0))
+                    self.encoder_conv.append(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0))
                 else:
-                    self.encoder_conv.append(Conv(hidden_size + embedding_size, embedding_size, 1, 1, 0))
+                    self.encoder_conv.append(nn.Conv3d(hidden_size + embedding_size, embedding_size, 1, 1, 0))
                 self.quantizer.append(VectorQuantization(embedding_size, num_embedding))
                 self.decoder.append(Decoder(embedding_size, embedding_size, hidden_size,
                                             num_res_block, res_size, stride=2))
