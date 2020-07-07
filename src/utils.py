@@ -105,12 +105,13 @@ def process_control():
     if cfg['data_name'] in ['Turb']:
         cfg['data_shape'] = [3, 128, 128, 128]
     if cfg['data_name'] in ['Turb']:
-        cfg['hidden_size'] = 128
-        cfg['num_res_block'] = 2
-        cfg['res_size'] = 32
-        cfg['embedding_size'] = 64
-        cfg['num_embedding'] = 512
-        cfg['vq_commit'] = 0.25
+        cfg['vqvae'] = {}
+        cfg['vqvae']['hidden_size'] = 128
+        cfg['vqvae']['num_res_block'] = 2
+        cfg['vqvae']['res_size'] = 32
+        cfg['vqvae']['embedding_size'] = 64
+        cfg['vqvae']['num_embedding'] = 512
+        cfg['vqvae']['vq_commit'] = 0.25
     return
 
 

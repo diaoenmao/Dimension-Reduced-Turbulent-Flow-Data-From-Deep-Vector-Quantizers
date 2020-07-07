@@ -151,11 +151,9 @@ class VQVAE(nn.Module):
         return decoded
 
     def decode_code(self, code):
-        code_top, code_mid, code_bottom = code
-        quantized_top = self.quantizer_top.embedding_code(code_top).permute(0, 4, 1, 2, 3)
-        quantized_mid = self.quantizer_top.embedding_code(code_mid).permute(0, 4, 1, 2, 3)
-        quantized_bottom = self.quantizer_bottom.embedding_code(code_bottom).permute(0, 4, 1, 2, 3)
-        quantized = (quantized_top, quantized_mid, quantized_bottom)
+        quantized = [None for _ in range(self.depth)]
+        for i in range(self.depth):
+            quantized[i] = self.quantizer[i].embedding_code(code[i]).transpose(1, -1).contiguous()
         decoded = self.decode(quantized)
         return decoded
 
@@ -172,13 +170,13 @@ class VQVAE(nn.Module):
 
 def vqvae():
     data_shape = cfg['data_shape']
-    hidden_size = cfg['hidden_size']
-    depth = cfg['depth']
-    num_res_block = cfg['num_res_block']
-    res_size = cfg['res_size']
-    embedding_size = cfg['embedding_size']
-    num_embedding = cfg['num_embedding']
-    vq_commit = cfg['vq_commit']
+    hidden_size = cfg['vqvae']['hidden_size']
+    depth = cfg['vqvae']['depth']
+    num_res_block = cfg['vqvae']['num_res_block']
+    res_size = cfg['vqvae']['res_size']
+    embedding_size = cfg['vqvae']['embedding_size']
+    num_embedding = cfg['vqvae']['num_embedding']
+    vq_commit = cfg['vqvae']['vq_commit']
     model = VQVAE(input_size=data_shape[0], hidden_size=hidden_size, depth=depth, num_res_block=num_res_block,
                   res_size=res_size, embedding_size=embedding_size, num_embedding=num_embedding,
                   vq_commit=vq_commit)
