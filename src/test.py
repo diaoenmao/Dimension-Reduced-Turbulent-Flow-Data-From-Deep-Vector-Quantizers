@@ -193,13 +193,13 @@ if __name__ == "__main__":
     input = collate(input)
     print(input['ts'].size(), input['uvw'].size())
 
-    # V = input['uvw']
-    # FFT_dV = FFT_derivative(V)
-    # Kornia_dV = Kornia_derivative(V)
-    # sobel_dV = Finite_derivative(V, mode='sobel')
-    # scharr_dV = Finite_derivative(V, mode='scharr')
-    # print(F.l1_loss(FFT_dV, Kornia_dV))
-    # print(F.l1_loss(FFT_dV, sobel_dV))
-    # print(F.l1_loss(FFT_dV, scharr_dV))
+    V = input['uvw']
+    FFT_dV = FFT_derivative(V)
+    Kornia_dV = Kornia_derivative(V)
+    sobel_dV = Finite_derivative(V, mode='sobel')
+    scharr_dV = Finite_derivative(V, mode='scharr')
+    print(F.l1_loss(FFT_dV, Kornia_dV))
+    print(F.l1_loss(FFT_dV, sobel_dV))
+    print(F.l1_loss(FFT_dV, scharr_dV))
 
     # test_edges()
