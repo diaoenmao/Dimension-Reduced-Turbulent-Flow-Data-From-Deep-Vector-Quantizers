@@ -22,6 +22,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import kornia
+import math
 from utils import ntuple
 
 
@@ -39,9 +40,9 @@ def FFT_derivative(V):
             V_i_c = V_i[c]
             V_i_c_fft = np.fft.fftn(V_i_c)
             mesh_h, mesh_w, mesh_d = np.meshgrid(h, w, d, indexing='ij')
-            dV_dh = np.real(np.fft.ifftn(1.0j * np.multiply(V_i_c_fft, mesh_h)))
-            dV_dw = np.real(np.fft.ifftn(1.0j * np.multiply(V_i_c_fft, mesh_w)))
-            dV_dd = np.real(np.fft.ifftn(1.0j * np.multiply(V_i_c_fft, mesh_d)))
+            dV_dh = np.real(np.fft.ifftn(1.0j * V_i_c_fft * mesh_h))
+            dV_dw = np.real(np.fft.ifftn(1.0j * V_i_c_fft * mesh_w))
+            dV_dd = np.real(np.fft.ifftn(1.0j * V_i_c_fft * mesh_d))
             dV_i_c = np.stack([dV_dh, dV_dw, dV_dd], axis=0)
             dV_i.append(dV_i_c)
         dV_i = np.stack(dV_i, axis=0)
@@ -51,9 +52,9 @@ def FFT_derivative(V):
     return dV
 
 
-def Kornia_derivative(V):
+def Kornia_derivative(V, dx):
     sg = kornia.filters.SpatialGradient3d(mode='diff', order=1)
-    dV = sg(V)
+    dV = sg(V) / dx
     return dV
 
 
@@ -86,7 +87,6 @@ def make_kernel(mode, d):
                     kernel[1][i][j][k] = hxyz[i] * hpxyz[j] * hxyz[k]
                     kernel[2][i][j][k] = hxyz[i] * hxyz[j] * hpxyz[k]
         kernel = kernel / kernel.abs().sum(dim=[-3, -2, -1]).view(-1, 1, 1, 1)
-    kernel = kernel.flip(0)
     return kernel
 
 
@@ -99,89 +99,15 @@ class SpatialGradient3d(nn.Module):
     def forward(self, input):
         B, C, H, W, D = input.size()
         kernel = self.kernel.unsqueeze(1).repeat(C, 1, 1, 1, 1)
-        padding = tuple(x for x in reversed(ntuple(3)(self.kernel.size(1) // 2)) for _ in range(2))
-        return F.conv3d(F.pad(input, padding, 'replicate'), kernel, padding=0, groups=C).view(B, C, 3, H, W, D)
+        padding = tuple(x for x in reversed(ntuple(3)(kernel.size(-1) // 2)) for _ in range(2))
+        output = F.conv3d(F.pad(input, padding, 'circular'), kernel, padding=0, groups=C).view(B, C, 3, H, W, D)
+        return output
 
 
-def Finite_derivative(V, mode='sobel'):
+def Finite_derivative(V, dx, mode='sobel'):
     sg = SpatialGradient3d(mode)
-    dV = sg(V)
+    dV = sg(V) / dx
     return dV
-
-
-def test_edges():
-    input = torch.tensor([[[
-        [[0., 0., 0., 0., 0.],
-         [0., 0., 0., 0., 0.],
-         [0., 0., 1., 0., 0.],
-         [0., 0., 0., 0., 0.],
-         [0., 0., 0., 0., 0.]],
-        [[0., 0., 0., 0., 0.],
-         [0., 0., 1., 0., 0.],
-         [0., 1., 1., 1., 0.],
-         [0., 0., 1., 0., 0.],
-         [0., 0., 0., 0., 0.]],
-        [[0., 0., 0., 0., 0.],
-         [0., 0., 0., 0., 0.],
-         [0., 0., 1., 0., 0.],
-         [0., 0., 0., 0., 0.],
-         [0., 0., 0., 0., 0.]],
-    ]]])
-
-    expected = torch.tensor([[[[[[0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.5000, 0.0000, -0.5000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000]],
-                                [[0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.5000, 0.0000, -0.5000, 0.0000],
-                                 [0.5000, 0.5000, 0.0000, -0.5000, -0.5000],
-                                 [0.0000, 0.5000, 0.0000, -0.5000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000]],
-                                [[0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.5000, 0.0000, -0.5000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000]]],
-                               [[[0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.5000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, -0.5000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000]],
-                                [[0.0000, 0.0000, 0.5000, 0.0000, 0.0000],
-                                 [0.0000, 0.5000, 0.5000, 0.5000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, -0.5000, -0.5000, -0.5000, 0.0000],
-                                 [0.0000, 0.0000, -0.5000, 0.0000, 0.0000]],
-                                [[0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.5000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, -0.5000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000]]],
-                               [[[0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.5000, 0.0000, 0.0000],
-                                 [0.0000, 0.5000, 0.0000, 0.5000, 0.0000],
-                                 [0.0000, 0.0000, 0.5000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000]],
-                                [[0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000]],
-                                [[0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, -0.5000, 0.0000, 0.0000],
-                                 [0.0000, -0.5000, 0.0000, -0.5000, 0.0000],
-                                 [0.0000, 0.0000, -0.5000, 0.0000, 0.0000],
-                                 [0.0000, 0.0000, 0.0000, 0.0000, 0.0000]]]]]])
-    FFT_edges = FFT_derivative(input)
-    print(F.l1_loss(FFT_edges, expected))
-    Kornia_edges = Kornia_derivative(input)
-    print(F.l1_loss(Kornia_edges, expected))
-    sobel_edges = Finite_derivative(input, mode='sobel')
-    print(F.l1_loss(sobel_edges, expected))
-    scharr_edges = Finite_derivative(input, mode='scharr')
-    print(F.l1_loss(scharr_edges, expected))
-    return
 
 
 if __name__ == "__main__":
@@ -194,12 +120,11 @@ if __name__ == "__main__":
     print(input['ts'].size(), input['uvw'].size())
 
     V = input['uvw']
+    dx = 2 * math.pi / 128
     FFT_dV = FFT_derivative(V)
-    Kornia_dV = Kornia_derivative(V)
-    sobel_dV = Finite_derivative(V, mode='sobel')
-    scharr_dV = Finite_derivative(V, mode='scharr')
+    Kornia_dV = Kornia_derivative(V, dx)
+    sobel_dV = Finite_derivative(V, dx, mode='sobel')
+    scharr_dV = Finite_derivative(V, dx, mode='scharr')
     print(F.l1_loss(FFT_dV, Kornia_dV))
     print(F.l1_loss(FFT_dV, sobel_dV))
     print(F.l1_loss(FFT_dV, scharr_dV))
-
-    # test_edges()
