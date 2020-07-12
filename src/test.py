@@ -43,7 +43,7 @@ def FFT_derivative(V):
             dV_dh = np.real(np.fft.ifftn(1.0j * V_i_c_fft * mesh_h))
             dV_dw = np.real(np.fft.ifftn(1.0j * V_i_c_fft * mesh_w))
             dV_dd = np.real(np.fft.ifftn(1.0j * V_i_c_fft * mesh_d))
-            dV_i_c = np.stack([dV_dh, dV_dw, dV_dd], axis=0)
+            dV_i_c = np.stack([dV_dd, dV_dw, dV_dh], axis=0)
             dV_i.append(dV_i_c)
         dV_i = np.stack(dV_i, axis=0)
         dV.append(dV_i)
@@ -59,7 +59,9 @@ def Kornia_derivative(V, dx):
 
 
 def make_kernel(mode, d):
-    if mode == 'sobel':
+    if mode == 'diff':
+        hxyz = torch.tensor([0, 1, 0], dtype=torch.float32)
+    elif mode == 'sobel':
         hxyz = torch.tensor([1, 2, 1], dtype=torch.float32)
     elif mode == 'scharr':
         hxyz = torch.tensor([3, 10, 3], dtype=torch.float32)
@@ -87,6 +89,7 @@ def make_kernel(mode, d):
                     kernel[1][i][j][k] = hxyz[i] * hpxyz[j] * hxyz[k]
                     kernel[2][i][j][k] = hxyz[i] * hxyz[j] * hpxyz[k]
         kernel = kernel / kernel.abs().sum(dim=[-3, -2, -1]).view(-1, 1, 1, 1)
+    kernel = kernel.flip(0)
     return kernel
 
 
@@ -123,8 +126,10 @@ if __name__ == "__main__":
     dx = 2 * math.pi / 128
     FFT_dV = FFT_derivative(V)
     Kornia_dV = Kornia_derivative(V, dx)
+    diff_dV = Finite_derivative(V, dx, mode='diff')
     sobel_dV = Finite_derivative(V, dx, mode='sobel')
     scharr_dV = Finite_derivative(V, dx, mode='scharr')
-    print(F.l1_loss(FFT_dV, Kornia_dV))
-    print(F.l1_loss(FFT_dV, sobel_dV))
-    print(F.l1_loss(FFT_dV, scharr_dV))
+    print('Kornia error', F.l1_loss(FFT_dV, Kornia_dV))
+    print('Diff error', F.l1_loss(FFT_dV, diff_dV))
+    print('Sobel error', F.l1_loss(FFT_dV, sobel_dV))
+    print('Scharr error', F.l1_loss(FFT_dV, scharr_dV))
