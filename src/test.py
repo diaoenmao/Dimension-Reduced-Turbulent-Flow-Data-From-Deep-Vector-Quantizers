@@ -23,6 +23,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import kornia
 import math
+import scipy
 from utils import ntuple
 
 
@@ -112,6 +113,24 @@ def Finite_derivative(V, dx, mode='sobel'):
     dV = sg(V) / dx
     return dV
 
+
+def DCT_derivative(V):
+    N, C, H, W, D = V.size()
+    h = np.fft.fftfreq(H, 1. / H)
+    w = np.fft.fftfreq(W, 1. / W)
+    d = np.fft.fftfreq(D, 1. / D)
+    dV = []
+    for c in range(C):
+        V_c = V[c]
+        V_c_fft = scipy.fft.dctn(V_c, type=2, norm='ortho')
+        mesh_h, mesh_w, mesh_d = np.meshgrid(h, w, d, indexing='ij')
+        dV_dh = inverse_transform(mesh_h / 2 * V_c_fft)
+        dV_dw = inverse_transform(mesh_w / 2 * V_c_fft)
+        dV_dd = inverse_transform(mesh_d / 2 * V_c_fft)
+        dV_i_c = np.stack([dV_dd, dV_dw, dV_dh], axis=0)
+        dV_i.append(dV_i_c)
+    dV = torch.tensor(dV, dtype=torch.float32)
+    return dV
 
 if __name__ == "__main__":
     process_control()
