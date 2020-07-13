@@ -114,23 +114,20 @@ def Finite_derivative(V, dx, mode='sobel'):
     return dV
 
 
-def DCT_derivative(V):
+def FFT_derivative_pytorch(V):
     N, C, H, W, D = V.size()
-    h = np.fft.fftfreq(H, 1. / H)
-    w = np.fft.fftfreq(W, 1. / W)
-    d = np.fft.fftfreq(D, 1. / D)
-    dV = []
-    for c in range(C):
-        V_c = V[c]
-        V_c_fft = scipy.fft.dctn(V_c, type=2, norm='ortho')
-        mesh_h, mesh_w, mesh_d = np.meshgrid(h, w, d, indexing='ij')
-        dV_dh = inverse_transform(mesh_h / 2 * V_c_fft)
-        dV_dw = inverse_transform(mesh_w / 2 * V_c_fft)
-        dV_dd = inverse_transform(mesh_d / 2 * V_c_fft)
-        dV_i_c = np.stack([dV_dd, dV_dw, dV_dh], axis=0)
-        dV_i.append(dV_i_c)
-    dV = torch.tensor(dV, dtype=torch.float32)
+    h = torch.tensor(np.fft.fftfreq(H, 1. / H), device=V.device, dtype=V.dtype)
+    w = torch.tensor(np.fft.fftfreq(W, 1. / W), device=V.device, dtype=V.dtype)
+    d = torch.tensor(np.fft.fftfreq(D, 1. / D), device=V.device, dtype=V.dtype)
+    mesh_h, mesh_w, mesh_d = torch.tensor(np.meshgrid(h, w, d, indexing='ij'), device=V.device, dtype=V.dtype)
+    V_fft = torch.rfft(V, signal_ndim=3, onesided=False)
+    V_fft_hat = torch.stack([-V_fft[..., 1], V_fft[..., 0]], dim=-1)
+    dV_dh = torch.irfft(V_fft_hat * mesh_h.unsqueeze(-1), signal_ndim=3, onesided=False)
+    dV_dw = torch.irfft(V_fft_hat * mesh_w.unsqueeze(-1), signal_ndim=3, onesided=False)
+    dV_dd = torch.irfft(V_fft_hat * mesh_d.unsqueeze(-1), signal_ndim=3, onesided=False)
+    dV = torch.stack([dV_dd, dV_dw, dV_dh], dim=2)
     return dV
+
 
 if __name__ == "__main__":
     process_control()
@@ -144,11 +141,13 @@ if __name__ == "__main__":
     V = input['uvw']
     dx = 2 * math.pi / 128
     FFT_dV = FFT_derivative(V)
-    Kornia_dV = Kornia_derivative(V, dx)
-    diff_dV = Finite_derivative(V, dx, mode='diff')
-    sobel_dV = Finite_derivative(V, dx, mode='sobel')
-    scharr_dV = Finite_derivative(V, dx, mode='scharr')
-    print('Kornia error', F.l1_loss(FFT_dV, Kornia_dV))
-    print('Diff error', F.l1_loss(FFT_dV, diff_dV))
-    print('Sobel error', F.l1_loss(FFT_dV, sobel_dV))
-    print('Scharr error', F.l1_loss(FFT_dV, scharr_dV))
+    # Kornia_dV = Kornia_derivative(V, dx)
+    # diff_dV = Finite_derivative(V, dx, mode='diff')
+    # sobel_dV = Finite_derivative(V, dx, mode='sobel')
+    # scharr_dV = Finite_derivative(V, dx, mode='scharr')
+    FFT_pytorch_dV = FFT_derivative_pytorch(V)
+    # print('Kornia error', F.l1_loss(FFT_dV, Kornia_dV))
+    # print('Diff error', F.l1_loss(FFT_dV, diff_dV))
+    # print('Sobel error', F.l1_loss(FFT_dV, sobel_dV))
+    # print('Scharr error', F.l1_loss(FFT_dV, scharr_dV))
+    print('FFT Pytorch error', F.l1_loss(FFT_dV, FFT_pytorch_dV))
