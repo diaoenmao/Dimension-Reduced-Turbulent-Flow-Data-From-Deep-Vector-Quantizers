@@ -185,88 +185,30 @@ def collate(input):
     return input
 
 
-def FFT_derivative(Phy_Vel, direction='x', Fast=True):
-    kk = np.fft.fftfreq(Phy_Vel.shape[0], 1. / Phy_Vel.shape[0])
-    pre = np.fft.fftn(Phy_Vel)
-    post = np.zeros_like(pre)
-    if Fast == False:
-        if direction == 'x':
-            for i in range(Phy_Vel.shape[0]):
-                for j in range(Phy_Vel.shape[1]):
-                    for k in range(Phy_Vel.shape[2]):
-                        post[k, j, i] = pre[k, j, i] * 1.0j * kk[i]  # no matter if you put kx or ky or kz
-        if direction == 'y':
-            for i in range(Phy_Vel.shape[0]):
-                for j in range(Phy_Vel.shape[1]):
-                    for k in range(Phy_Vel.shape[2]):
-                        post[k, j, i] = pre[k, j, i] * 1.0j * kk[j]  # no matter if you put kx or ky or kz
-        if direction == 'z':
-            for i in range(Phy_Vel.shape[0]):
-                for j in range(Phy_Vel.shape[1]):
-                    for k in range(Phy_Vel.shape[2]):
-                        post[k, j, i] = pre[k, j, i] * 1.0j * kk[k]  # no matter if you put kx or ky or kz
-        output = np.real(np.fft.ifftn(post))
-    else:
-        kxmesh, kymesh, kzmesh = np.meshgrid(kk, kk, kk, indexing='ij')
-        if direction == 'x':
-            output = np.real(np.fft.ifftn(1.0j * np.multiply(pre, kzmesh)))
-        elif direction == 'y':
-            output = np.real(np.fft.ifftn(1.0j * np.multiply(pre, kymesh)))
-        else:  # direction=='z'
-            output = np.real(np.fft.ifftn(1.0j * np.multiply(pre, kxmesh)))
-    return output
-
-
-def Q_R_Calculator_slow(A_2d):
-    A2 = np.matmul(A_2d, A_2d)
-    A3 = np.matmul(A_2d, A2)
-    Q = (-1 / 2) * np.trace(A2)
-    R = (-1 / 3) * np.trace(A3)
-    S = (1 / 2) * (A_2d + A_2d.T)
-    SijSij = np.sum(S * S)  # rotation
-    Rot = (1 / 2) * (A_2d - A_2d.T)
-    RijRij = np.sum(Rot * Rot)
-    return Q, R, SijSij, RijRij
-
-
-def Q_R_Calculator(A11, A12, A13, A21, A22, A23, A31, A32, A33, Fast=True):
-    if Fast == False:
-        ng = A11.shape[0]
-        R_loop = np.zeros_like(A11)
-        Q_loop = np.zeros_like(A11)
-        SijSij_loop = np.zeros_like(A11)
-        RijRij_loop = np.zeros_like(A11)
-        for i in range(0, ng):
-            for j in range(0, ng):
-                for k in range(0, ng):
-                    A_2d_t = np.array([
-                        [A11[i, j, k], A12[i, j, k], A13[i, j, k]],
-                        [A21[i, j, k], A22[i, j, k], A23[i, j, k]],
-                        [A31[i, j, k], A32[i, j, k], A33[i, j, k]]
-                    ])
-                    Q_loop[i, j, k], R_loop[i, j, k], SijSij_loop[i, j, k], RijRij_loop[i, j, k] = Q_R_Calculator_slow(
-                        A_2d_t)
-        return Q_loop, R_loop, SijSij_loop, RijRij_loop
-
-    else:
-        # compute trace of A2=A^2=np.matmul(A,A)
-        trace_A2 = A11 ** 2 + A22 ** 2 + A33 ** 2 + 2 * (A12 * A21 + A13 * A31 + A23 * A32)
-        # compute trace of A3=A^3=np.matmul(A,A2)
-        trace_A3 = A11 * (A11 ** 2 + A12 * A21 + A13 * A31) + \
-                   A22 * (A22 ** 2 + A12 * A21 + A23 * A32) + \
-                   A33 * (A33 ** 2 + A13 * A31 + A23 * A32) + \
-                   A21 * (A11 * A12 + A12 * A22 + A13 * A32) + \
-                   A31 * (A11 * A13 + A12 * A23 + A13 * A33) + \
-                   A12 * (A11 * A21 + A21 * A22 + A23 * A31) + \
-                   A32 * (A13 * A21 + A22 * A23 + A23 * A33) + \
-                   A13 * (A11 * A31 + A21 * A32 + A31 * A33) + \
-                   A23 * (A12 * A31 + A22 * A32 + A32 * A33)
-        S_ijS_ij = ((1 / 2) * (A11 + A11)) ** 2 + ((1 / 2) * (A22 + A22)) ** 2 + ((1 / 2) * (A33 + A33)) ** 2 + \
-                   2 * ((1 / 2) * (A12 + A21)) ** 2 + 2 * ((1 / 2) * (A13 + A31)) ** 2 + 2 * (
-                           (1 / 2) * (A23 + A32)) ** 2
-        R_ijR_ij = 2 * ((1 / 2) * (A12 - A21)) ** 2 + 2 * ((1 / 2) * (A13 - A31)) ** 2 + 2 * (
-                (1 / 2) * (A23 - A32)) ** 2
-        return (-1 / 2) * trace_A2, (-1 / 3) * trace_A3, S_ijS_ij, R_ijR_ij  # Q,R,,S_ijS_ij
+def Q_R(A):
+    A11, A12, A13 = A[:, 0, 0], A[:, 0, 1], A[:, 0, 2]
+    A21, A22, A23 = A[:, 1, 0], A[:, 1, 1], A[:, 1, 2]
+    A31, A32, A33 = A[:, 2, 0], A[:, 2, 1], A[:, 2, 2]
+    # compute trace of A2=A^2=np.matmul(A,A)
+    trace_A2 = A11 ** 2 + A22 ** 2 + A33 ** 2 + 2 * (A12 * A21 + A13 * A31 + A23 * A32)
+    # compute trace of A3=A^3=np.matmul(A,A2)
+    trace_A3 = A11 * (A11 ** 2 + A12 * A21 + A13 * A31) + \
+               A22 * (A22 ** 2 + A12 * A21 + A23 * A32) + \
+               A33 * (A33 ** 2 + A13 * A31 + A23 * A32) + \
+               A21 * (A11 * A12 + A12 * A22 + A13 * A32) + \
+               A31 * (A11 * A13 + A12 * A23 + A13 * A33) + \
+               A12 * (A11 * A21 + A21 * A22 + A23 * A31) + \
+               A32 * (A13 * A21 + A22 * A23 + A23 * A33) + \
+               A13 * (A11 * A31 + A21 * A32 + A31 * A33) + \
+               A23 * (A12 * A31 + A22 * A32 + A32 * A33)
+    Q = (-1 / 2) * trace_A2
+    R = (-1 / 3) * trace_A3
+    S_ijS_ij = ((1 / 2) * (A11 + A11)) ** 2 + ((1 / 2) * (A22 + A22)) ** 2 + ((1 / 2) * (A33 + A33)) ** 2 + \
+               2 * ((1 / 2) * (A12 + A21)) ** 2 + 2 * ((1 / 2) * (A13 + A31)) ** 2 + 2 * (
+                       (1 / 2) * (A23 + A32)) ** 2
+    R_ijR_ij = 2 * ((1 / 2) * (A12 - A21)) ** 2 + 2 * ((1 / 2) * (A13 - A31)) ** 2 + 2 * (
+            (1 / 2) * (A23 - A32)) ** 2
+    return Q, R, S_ijS_ij, R_ijR_ij
 
 
 def plot_PDF_VelocityGrad_DL_Model_DNS(A11_DNS, A12_DNS, A13_DNS, A21_DNS, A22_DNS, A23_DNS, A31_DNS, A32_DNS, A33_DNS,
@@ -315,7 +257,7 @@ def plot_PDF_VelocityGrad_DL_Model_DNS(A11_DNS, A12_DNS, A13_DNS, A21_DNS, A22_D
         plt.close()
 
 
-def vis(signal, recon_signal, path, i_d_min=5, fontsize=10, num_bins=1500):
+def vis(signal, derivative, recon_signal, path, i_d_min=5, fontsize=10, num_bins=1500):
     import scipy.stats as stats
     fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(10, 10))
     j_d_min, j_d_max = 0, 128
@@ -427,6 +369,19 @@ def vis(signal, recon_signal, path, i_d_min=5, fontsize=10, num_bins=1500):
                                        DL_model_outputs_DNS['A32' + '_' + 'Model'],
                                        DL_model_outputs_DNS['A33' + '_' + 'Model'],
                                        path=path)
-    makedir_exist_ok(path)
-    save(DL_model_outputs_DNS, '{}/dns_{}.pt'.format(path, cfg['model_tag']))
     return
+
+
+def spectral_derivative_3d(V):
+    N, C, H, W, D = V.size()
+    h = torch.tensor(np.fft.fftfreq(H, 1. / H), device=V.device, dtype=V.dtype)
+    w = torch.tensor(np.fft.fftfreq(W, 1. / W), device=V.device, dtype=V.dtype)
+    d = torch.tensor(np.fft.fftfreq(D, 1. / D), device=V.device, dtype=V.dtype)
+    mesh_h, mesh_w, mesh_d = torch.tensor(np.meshgrid(h, w, d, indexing='ij'), device=V.device, dtype=V.dtype)
+    V_fft = torch.rfft(V, signal_ndim=3, onesided=False)
+    V_fft_hat = torch.stack([-V_fft[..., 1], V_fft[..., 0]], dim=-1)
+    dV_dh = torch.irfft(V_fft_hat * mesh_h.unsqueeze(-1), signal_ndim=3, onesided=False)
+    dV_dw = torch.irfft(V_fft_hat * mesh_w.unsqueeze(-1), signal_ndim=3, onesided=False)
+    dV_dd = torch.irfft(V_fft_hat * mesh_d.unsqueeze(-1), signal_ndim=3, onesided=False)
+    dV = torch.stack([dV_dh, dV_dw, dV_dd], dim=2)
+    return dV

@@ -58,37 +58,65 @@ class Turb(Dataset):
         train_ts = np.arange(4050, 7050 + 75, 75).astype(np.int64)
         test_ts = np.arange(7050 + 75, 10050 + 75, 75).astype(np.int64)
         train_uvw = []
+        train_duvw = []
         for i in range(len(train_ts)):
             u, v, w = np.zeros((Ng, Ng, Ng)), np.zeros((Ng, Ng, Ng)), np.zeros((Ng, Ng, Ng))
+            du, dv, dw = np.zeros((3, Ng, Ng, Ng)), np.zeros((3, Ng, Ng, Ng)), np.zeros((3, Ng, Ng, Ng))
             for b in range(0, Nb):
                 f = h5py.File(os.path.join(self.raw_folder, sub_folder, '{}.{:06.0f}.h5.{:06.0f}'.format(
                     filename_lead, train_ts[i], b)), 'r')
                 i_min, i_max = b // 4 * Ng // 4, (b // 4 + 1) * Ng // 4
                 j_min, j_max = (b % 4) * Ng // 4, ((b % 4) + 1) * Ng // 4
-                u[i_min:i_max, j_min:j_max, :] = f['Phy_U'][:]
+                u[i_min:i_max, j_min:j_max, :] = f['Phy_W'][:]
                 v[i_min:i_max, j_min:j_max, :] = f['Phy_V'][:]
-                w[i_min:i_max, j_min:j_max, :] = f['Phy_W'][:]
+                w[i_min:i_max, j_min:j_max, :] = f['Phy_U'][:]
+                du[0, i_min:i_max, j_min:j_max, :] = f['dWdzG'][:]
+                du[1, i_min:i_max, j_min:j_max, :] = f['dWdyG'][:]
+                du[2, i_min:i_max, j_min:j_max, :] = f['dWdxG'][:]
+                dv[0, i_min:i_max, j_min:j_max, :] = f['dVdzG'][:]
+                dv[1, i_min:i_max, j_min:j_max, :] = f['dVdyG'][:]
+                dv[2, i_min:i_max, j_min:j_max, :] = f['dVdxG'][:]
+                dw[0, i_min:i_max, j_min:j_max, :] = f['dUdzG'][:]
+                dw[1, i_min:i_max, j_min:j_max, :] = f['dUdyG'][:]
+                dw[2, i_min:i_max, j_min:j_max, :] = f['dUdxG'][:]
                 f.close()
             uvw = np.stack([u, v, w], axis=0).astype(np.float32)
+            duvw = np.stack([du, dv, dw], axis=0).astype(np.float32)
             save(uvw, os.path.join(self.raw_folder, '{}.pkl'.format(train_ts[i])))
+            save(duvw, os.path.join(self.raw_folder, '{}_d.pkl'.format(train_ts[i])))
             train_uvw.append(os.path.join(self.raw_folder, '{}.pkl'.format(train_ts[i])))
+            train_duvw.append(os.path.join(self.raw_folder, '{}_d.pkl'.format(train_ts[i])))
         test_uvw = []
+        test_duvw = []
         for i in range(len(test_ts)):
             u, v, w = np.zeros((Ng, Ng, Ng)), np.zeros((Ng, Ng, Ng)), np.zeros((Ng, Ng, Ng))
+            du, dv, dw = np.zeros((3, Ng, Ng, Ng)), np.zeros((3, Ng, Ng, Ng)), np.zeros((3, Ng, Ng, Ng))
             for b in range(0, Nb):
                 f = h5py.File(os.path.join(self.raw_folder, sub_folder, '{}.{:06.0f}.h5.{:06.0f}'.format(
                     filename_lead, test_ts[i], b)), 'r')
                 i_min, i_max = b // 4 * Ng // 4, (b // 4 + 1) * Ng // 4
                 j_min, j_max = (b % 4) * Ng // 4, ((b % 4) + 1) * Ng // 4
-                u[i_min:i_max, j_min:j_max, :] = f['Phy_U'][:]
+                u[i_min:i_max, j_min:j_max, :] = f['Phy_W'][:]
                 v[i_min:i_max, j_min:j_max, :] = f['Phy_V'][:]
-                w[i_min:i_max, j_min:j_max, :] = f['Phy_W'][:]
+                w[i_min:i_max, j_min:j_max, :] = f['Phy_U'][:]
+                du[0, i_min:i_max, j_min:j_max, :] = f['dWdzG'][:]
+                du[1, i_min:i_max, j_min:j_max, :] = f['dWdyG'][:]
+                du[2, i_min:i_max, j_min:j_max, :] = f['dWdxG'][:]
+                dv[0, i_min:i_max, j_min:j_max, :] = f['dVdzG'][:]
+                dv[1, i_min:i_max, j_min:j_max, :] = f['dVdyG'][:]
+                dv[2, i_min:i_max, j_min:j_max, :] = f['dVdxG'][:]
+                dw[0, i_min:i_max, j_min:j_max, :] = f['dUdzG'][:]
+                dw[1, i_min:i_max, j_min:j_max, :] = f['dUdyG'][:]
+                dw[2, i_min:i_max, j_min:j_max, :] = f['dUdxG'][:]
                 f.close()
             uvw = np.stack([u, v, w], axis=0).astype(np.float32)
+            duvw = np.stack([du, dv, dw], axis=0).astype(np.float32)
             save(uvw, os.path.join(self.raw_folder, '{}.pkl'.format(test_ts[i])))
+            save(duvw, os.path.join(self.raw_folder, '{}_d.pkl'.format(test_ts[i])))
             test_uvw.append(os.path.join(self.raw_folder, '{}.pkl'.format(test_ts[i])))
-        train_uvw_result = {'ts': train_ts[:-1], 'uvw': train_uvw[:-1]}
-        train_nuvw_result = {'ts': train_ts[1:], 'uvw': train_uvw[:-1], 'nuvw': train_uvw[1:]}
-        test_uvw_result = {'ts': test_ts[:-1], 'uvw': test_uvw[:-1]}
-        test_nuvw_result = {'ts': test_ts[1:], 'uvw': test_uvw[:-1], 'nuvw': test_uvw[1:]}
+            test_uvw.append(os.path.join(self.raw_folder, '{}_d.pkl'.format(test_ts[i])))
+        train_uvw_result = {'ts': train_ts[:-1], 'uvw': train_uvw[:-1], 'duvw': train_duvw[:-1]}
+        train_nuvw_result = {'ts': train_ts[1:], 'uvw': train_uvw[:-1], 'nuvw': train_uvw[1:], 'dnuvw': train_duvw[1:]}
+        test_uvw_result = {'ts': test_ts[:-1], 'uvw': test_uvw[:-1], 'duvw': test_duvw[:-1]}
+        test_nuvw_result = {'ts': test_ts[1:], 'uvw': test_uvw[:-1], 'nuvw': test_uvw[1:], 'dnuvw': test_duvw[1:]}
         return {'uvw': train_uvw_result, 'nuvw': train_nuvw_result}, {'uvw': test_uvw_result, 'nuvw': test_nuvw_result}
