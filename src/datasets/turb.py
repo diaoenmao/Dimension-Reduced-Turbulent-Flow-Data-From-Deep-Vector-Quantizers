@@ -55,8 +55,8 @@ class Turb(Dataset):
         sub_folder = 'Data_Re_90_Fr_Inf_Ng_128_Npr_16_AcD_V25'
         filename_lead = 'V25_Phy_Vel_VelG'
         Ng, Nb = 128, 16
-        train_ts = np.arange(4050, 7050 + 75, 75).astype(np.int64)
-        test_ts = np.arange(7050 + 75, 10050 + 75, 75).astype(np.int64)
+        train_ts = np.arange(4050, 7050, 75).astype(np.int64)
+        test_ts = np.arange(7050, 10050, 75).astype(np.int64)
         train_uvw = []
         train_duvw = []
         for i in range(len(train_ts)):
@@ -114,7 +114,7 @@ class Turb(Dataset):
             save(uvw, os.path.join(self.raw_folder, '{}.pkl'.format(test_ts[i])))
             save(duvw, os.path.join(self.raw_folder, '{}_d.pkl'.format(test_ts[i])))
             test_uvw.append(os.path.join(self.raw_folder, '{}.pkl'.format(test_ts[i])))
-            test_uvw.append(os.path.join(self.raw_folder, '{}_d.pkl'.format(test_ts[i])))
+            test_duvw.append(os.path.join(self.raw_folder, '{}_d.pkl'.format(test_ts[i])))
         train_uvw_result = {'ts': train_ts[:-1], 'uvw': train_uvw[:-1], 'duvw': train_duvw[:-1]}
         train_nuvw_result = {'ts': train_ts[1:], 'uvw': train_uvw[:-1], 'nuvw': train_uvw[1:], 'dnuvw': train_duvw[1:]}
         test_uvw_result = {'ts': test_ts[:-1], 'uvw': test_uvw[:-1], 'duvw': test_duvw[:-1]}

@@ -10,11 +10,16 @@ def MSE(output, target):
     return mse
 
 
+
+
+
 class Metric(object):
     def __init__(self):
         self.metric = {}
         self.metric['Loss'] = lambda input, output: output['loss'].item()
         self.metric['MSE'] = lambda input, output: recur(MSE, output[cfg['subset']], input[cfg['subset']])
+        self.metric['D_MSE'] = lambda input, output: recur(MSE, output['d{}'.format(cfg['subset'])],
+                                                           input['d{}'.format(cfg['subset'])])
 
     def evaluate(self, metric_names, input, output):
         evaluation = {}

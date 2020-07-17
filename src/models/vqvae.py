@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from config import cfg
 from modules import VectorQuantization
-from .utils import init_param
+from .utils import init_param, spectral_derivative_3d
 
 Normalization = nn.BatchNorm3d
 Activation = nn.ReLU
@@ -89,7 +89,7 @@ class Decoder(nn.Module):
 
 class VQVAE(nn.Module):
     def __init__(self, input_size=3, hidden_size=128, depth=3, num_res_block=2, res_size=32, embedding_size=64,
-                 num_embedding=512, vq_commit=0.25):
+                 num_embedding=512, d_commit=1, vq_commit=0.25):
         super().__init__()
         self.upsampler, self.encoder, self.encoder_conv, self.quantizer, self.decoder = [], [], [], [], []
         for i in range(depth):
@@ -119,6 +119,7 @@ class VQVAE(nn.Module):
         self.quantizer = nn.ModuleList(self.quantizer)
         self.decoder = nn.ModuleList(self.decoder)
         self.depth = depth
+        self.d_commit = d_commit
         self.vq_commit = vq_commit
 
     def encode(self, input):
@@ -161,24 +162,27 @@ class VQVAE(nn.Module):
         output = {'loss': torch.tensor(0, device=cfg['device'], dtype=torch.float32)}
         x = input['uvw']
         quantized, diff, output['code'] = self.encode(x)
-        vq_loss = sum(diff) / len(diff)
         decoded = self.decode(quantized)
         output['uvw'] = decoded
-        output['loss'] = F.mse_loss(decoded, input['uvw']) + self.vq_commit * vq_loss
+        output['duvw'] = spectral_derivative_3d(output['uvw'])
+        output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + \
+                         self.d_commit * F.mse_loss(output['duvw'], input['duvw']) + \
+                         self.vq_commit * (sum(diff) / len(diff))
         return output
 
 
 def vqvae():
     data_shape = cfg['data_shape']
     hidden_size = cfg['vqvae']['hidden_size']
-    depth = cfg['vqvae']['depth']
+    depth = cfg['depth']
     num_res_block = cfg['vqvae']['num_res_block']
     res_size = cfg['vqvae']['res_size']
     embedding_size = cfg['vqvae']['embedding_size']
     num_embedding = cfg['vqvae']['num_embedding']
+    d_commit = cfg['d_commit']
     vq_commit = cfg['vqvae']['vq_commit']
     model = VQVAE(input_size=data_shape[0], hidden_size=hidden_size, depth=depth, num_res_block=num_res_block,
                   res_size=res_size, embedding_size=embedding_size, num_embedding=num_embedding,
-                  vq_commit=vq_commit)
+                  d_commit=d_commit, vq_commit=vq_commit)
     model.apply(init_param)
     return model

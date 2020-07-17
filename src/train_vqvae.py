@@ -30,7 +30,7 @@ cfg['pivot_metric'] = 'MSE'
 cfg['pivot'] = float('inf')
 if cfg['data_name'] in ['Turb']:
     cfg['batch_size'] = {'train': 1, 'test': 1}
-cfg['metric_name'] = {'train': ['Loss', 'MSE'], 'test': ['Loss', 'MSE']}
+cfg['metric_name'] = {'train': ['Loss', 'MSE', 'D_MSE'], 'test': ['Loss', 'MSE', 'D_MSE']}
 cfg['optimizer_name'] = 'Adam'
 cfg['lr'] = 3e-4
 cfg['weight_decay'] = 1e-5
@@ -79,7 +79,7 @@ def runExperiment():
         train(data_loader['train'], model, optimizer, logger, epoch)
         test(data_loader['test'], model, logger, epoch)
         if cfg['scheduler_name'] == 'ReduceLROnPlateau':
-            scheduler.step(metrics=logger.tracker['train/{}'.format(cfg['pivot_metric'])], epoch=epoch)
+            scheduler.step(metrics=logger.tracker['train/{}'.format(cfg['pivot_metric'])])
         else:
             scheduler.step()
         logger.safe(False)
@@ -145,7 +145,7 @@ def test(data_loader, model, logger, epoch):
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
         if cfg['show']:
-            vis(input['uvw'].cpu().numpy(), output['uvw'].cpu().numpy(), './output/vis')
+            vis(input, output, './output/vis')
     return
 
 

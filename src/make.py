@@ -30,7 +30,7 @@ def main():
     init_seeds = [list(range(0, num_experiments, experiments_step))]
     num_epochs = [[200]]
     num_experiments = [[experiments_step]]
-    control = [['1', '2', '3', '4', '5', '6']]
+    control = [['1', '2', '3', '4', '5', '6'], ['0', '0.001', '0.1', '1']]
     s = '#!/bin/bash\n'
     k = 0
     for i in range(len(data_names)):

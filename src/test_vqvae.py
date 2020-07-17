@@ -25,7 +25,7 @@ if args['control_name']:
 cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
 if cfg['data_name'] in ['Turb']:
     cfg['batch_size'] = {'train': 1, 'test': 1}
-cfg['metric_name'] = {'train': ['Loss', 'MSE'], 'test': ['Loss', 'MSE']}
+cfg['metric_name'] = {'train': ['Loss', 'MSE', 'D_MSE'], 'test': ['Loss', 'MSE', 'D_MSE']}
 
 
 def main():
@@ -76,7 +76,7 @@ def test(data_loader, model, logger, epoch):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
-        vis(input['uvw'].cpu().numpy(), output['uvw'].cpu().numpy(), './output/vis')
+        vis(input, output, './output/vis')
     return
 
 
