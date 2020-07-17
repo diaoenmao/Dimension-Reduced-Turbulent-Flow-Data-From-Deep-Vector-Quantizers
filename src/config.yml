@@ -2,7 +2,6 @@
 # control
 control:
   depth: '3'
-  d_commit: '1'
 # data
 data_name: Turb
 subset: uvw

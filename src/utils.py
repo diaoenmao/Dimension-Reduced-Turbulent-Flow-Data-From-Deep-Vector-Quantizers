@@ -102,7 +102,6 @@ def process_dataset(dataset):
 
 def process_control():
     cfg['depth'] = int(cfg['control']['depth'])
-    cfg['d_commit'] = float(cfg['control']['d_commit'])
     if cfg['data_name'] in ['Turb']:
         cfg['data_shape'] = [3, 128, 128, 128]
     if cfg['data_name'] in ['Turb']:
@@ -112,7 +111,8 @@ def process_control():
         cfg['vqvae']['res_size'] = 32
         cfg['vqvae']['embedding_size'] = 64
         cfg['vqvae']['num_embedding'] = 512
-        cfg['vqvae']['vq_commit'] = 0.25
+        cfg['vqvae']['vq_commit'] = 1
+        cfg['vqvae']['d_commit'] = 1
     return
 
 
