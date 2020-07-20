@@ -32,8 +32,8 @@ if cfg['data_name'] in ['Turb']:
     cfg['batch_size'] = {'train': 1, 'test': 1}
 cfg['metric_name'] = {'train': ['Loss', 'MSE', 'D_MSE'], 'test': ['Loss', 'MSE', 'D_MSE']}
 cfg['optimizer_name'] = 'Adam'
-cfg['lr'] = 3e-4
-cfg['weight_decay'] = 1e-5
+cfg['lr'] = 1e-3
+cfg['weight_decay'] = 1e-4
 cfg['scheduler_name'] = 'ReduceLROnPlateau'
 cfg['show'] = False
 
@@ -110,6 +110,7 @@ def train(data_loader, model, optimizer, logger, epoch):
         output = model(input)
         output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
         output['loss'].backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
             batch_time = time.time() - start_time

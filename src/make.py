@@ -8,6 +8,8 @@ parser.add_argument('--round', default=4, type=int)
 parser.add_argument('--num_gpu', default=4, type=int)
 parser.add_argument('--experiments_step', default=1, type=int)
 parser.add_argument('--num_experiments', default=1, type=int)
+parser.add_argument('--num_epochs', default=200, type=int)
+parser.add_argument('--resume_mode', default=0, type=int)
 args = vars(parser.parse_args())
 
 
@@ -18,6 +20,7 @@ def main():
     num_gpu = args['num_gpu']
     experiments_step = args['experiments_step']
     num_experiments = args['num_experiments']
+    num_epochs = args['num_epochs']
     gpu_ids = [str(x) for x in list(range(num_gpu))]
     if run in ['train', 'test']:
         filename = '{}_{}'.format(run, model)
@@ -28,7 +31,7 @@ def main():
     data_names = ['Turb']
     model_names = [[model]]
     init_seeds = [list(range(0, num_experiments, experiments_step))]
-    num_epochs = [[200]]
+    num_epochs = [[num_epochs]]
     num_experiments = [[experiments_step]]
     control = [['1', '2', '3', '4', '5', '6']]
     s = '#!/bin/bash\n'
@@ -40,7 +43,7 @@ def main():
         for j in range(len(controls)):
             controls[j] = list(controls[j])
             s = s + 'CUDA_VISIBLE_DEVICES=\"{}\" python {} --data_name {} --model_name {} --init_seed {} ' \
-                    '--num_epochs {} --num_experiments {} --control_name {}&\n'.format(
+                    '--num_experiments {} --num_epochs {} --resume_mode {} --control_name {}&\n'.format(
                 gpu_ids[k % len(gpu_ids)], *controls[j])
             if k % round == round - 1:
                 s = s[:-2] + '\n'
