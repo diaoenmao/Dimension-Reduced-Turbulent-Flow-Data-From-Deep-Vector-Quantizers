@@ -179,7 +179,7 @@ def vqvae():
     res_size = cfg['vqvae']['res_size']
     embedding_size = cfg['vqvae']['embedding_size']
     num_embedding = cfg['vqvae']['num_embedding']
-    d_commit = cfg['vqvae']['d_commit']
+    d_commit = cfg['d_commit']
     vq_commit = cfg['vqvae']['vq_commit']
     model = VQVAE(input_size=data_shape[0], hidden_size=hidden_size, depth=depth, num_res_block=num_res_block,
                   res_size=res_size, embedding_size=embedding_size, num_embedding=num_embedding,

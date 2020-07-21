@@ -10,9 +10,6 @@ def MSE(output, target):
     return mse
 
 
-
-
-
 class Metric(object):
     def __init__(self):
         self.metric = {}
