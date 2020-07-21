@@ -190,7 +190,6 @@ def Q_R(A):
     A11, A12, A13 = A[:, 0, 0], A[:, 0, 1], A[:, 0, 2]
     A21, A22, A23 = A[:, 1, 0], A[:, 1, 1], A[:, 1, 2]
     A31, A32, A33 = A[:, 2, 0], A[:, 2, 1], A[:, 2, 2]
-    trace_A1 = A11 + A22 + A33
     trace_A2 = A11 ** 2 + A22 ** 2 + A33 ** 2 + 2 * (A12 * A21 + A13 * A31 + A23 * A32)
     trace_A3 = A11 * (A11 ** 2 + A12 * A21 + A13 * A31) + \
                A22 * (A22 ** 2 + A12 * A21 + A23 * A32) + \
@@ -209,52 +208,6 @@ def Q_R(A):
     R_ijR_ij = 2 * ((1 / 2) * (A12 - A21)) ** 2 + 2 * ((1 / 2) * (A13 - A31)) ** 2 + 2 * (
             (1 / 2) * (A23 - A32)) ** 2
     return Q, R, S_ijS_ij, R_ijR_ij
-
-
-def plot_PDF_VelocityGrad_DL_Model_DNS(A11_DNS, A12_DNS, A13_DNS, A21_DNS, A22_DNS, A23_DNS, A31_DNS, A32_DNS, A33_DNS,
-                                       A11_Model, A12_Model, A13_Model, A21_Model, A22_Model, A23_Model, A31_Model,
-                                       A32_Model, A33_Model, str_list_var=None, num_bins=int(1000 // 2), path=None):
-    if str_list_var is None:
-        str_list_var = ['dUdx_Phy', 'dUdy_Phy', 'dUdz_Phy', 'dVdx_Phy', 'dVdy_Phy', 'dVdz_Phy', 'dWdx_Phy', 'dWdy_Phy',
-                        'dWdz_Phy']
-    import scipy.stats as stats
-    def replaceZeroes(data):
-        min_nonzero = np.min(data[np.nonzero(data)])
-        data[data == 0] = min_nonzero
-        return data
-
-    list_var_Model = [A11_Model, A12_Model, A13_Model, A21_Model, A22_Model, A23_Model, A31_Model, A32_Model, A33_Model]
-    list_var_DNS = [A11_DNS, A12_DNS, A13_DNS, A21_DNS, A22_DNS, A23_DNS, A31_DNS, A32_DNS, A33_DNS]
-    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(20, 25))
-    fontsize = 15
-    for i, var_Model, var_DNS, var_name in zip(range(9), list_var_Model, list_var_DNS, str_list_var):
-        # Model
-        p, x = np.histogram((var_Model.ravel() - np.mean(var_Model.ravel())) / np.std(var_Model.ravel()), density=True,
-                            bins=num_bins)
-        x = x[:-1] + (x[1] - x[0]) / 2
-        y = np.log10(replaceZeroes(p))
-        axes[i // 3][i % 3].plot(x, y, 'b', lw=2, label=var_name + '_Model')
-        # DNS
-        p, x = np.histogram((var_DNS.ravel() - np.mean(var_DNS.ravel())) / np.std(var_DNS.ravel()), density=True,
-                            bins=num_bins)
-        x = x[:-1] + (x[1] - x[0]) / 2
-        y = np.log10(replaceZeroes(p))
-        axes[i // 3][i % 3].plot(x, y, 'g', lw=2, label=var_name + '_DNS')
-        axes[i // 3][i % 3].set_title("MSE = %.4f" % np.mean((var_DNS - var_Model) ** 2), fontsize=fontsize)
-        axes[i // 3][i % 3].set_xlim(-10, 10)
-        axes[i // 3][i % 3].set_ylim(-5, 0)
-        axes[i // 3][i % 3].set_xlabel("Normalized " + var_name, fontsize=fontsize)
-        axes[i // 3][i % 3].set_ylabel('log10(PDF)', fontsize=fontsize)
-        axes[i // 3][i % 3].grid(True)
-        xx = np.linspace(-5, 5, 1000)
-        axes[i // 3][i % 3].plot(xx, np.log10(stats.norm.pdf(xx, 0, 1)), 'r--', label="Gaussian")
-        axes[i // 3][i % 3].legend(fontsize=fontsize)
-    if path is not None:
-        plt.tight_layout()
-        makedir_exist_ok(path)
-        fig.savefig('{}/vg_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
-                    fontsize=fontsize)
-        plt.close()
 
 
 def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
@@ -320,8 +273,8 @@ def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
             p[p == 0] = np.min(p[np.nonzero(p)])
             y = np.log10(p)
             ax[i][j].plot(x, y, 'b', lw=2, label='Reconstructed {}'.format(label[i][j]))
-            ax[i][j].set_title('MSE = {:.4f}'.format(np.mean((output_duvw[:, i, :, :, :] -
-                                                              input_duvw[:, i, :, :, :]) ** 2)), fontsize=fontsize)
+            ax[i][j].set_title('MSE = {:.4f}'.format(np.mean((output_duvw[:, i, j, :, :, :] -
+                                                              input_duvw[:, i, j, :, :,:]) ** 2)), fontsize=fontsize)
             ax[i][j].set_xlim(-10, 10)
             ax[i][j].set_ylim(-5, 0)
             ax[i][j].set_xlabel('Normalized {}'.format(label[i][j]), fontsize=fontsize)

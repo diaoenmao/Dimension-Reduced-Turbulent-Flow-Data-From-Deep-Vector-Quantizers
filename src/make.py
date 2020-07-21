@@ -21,6 +21,7 @@ def main():
     experiments_step = args['experiments_step']
     num_experiments = args['num_experiments']
     num_epochs = args['num_epochs']
+    resume_mode = args['resume_mode']
     gpu_ids = [str(x) for x in list(range(num_gpu))]
     if run in ['train', 'test']:
         filename = '{}_{}'.format(run, model)
@@ -32,13 +33,15 @@ def main():
     model_names = [[model]]
     init_seeds = [list(range(0, num_experiments, experiments_step))]
     num_epochs = [[num_epochs]]
+    resume_mode = [[resume_mode]]
     num_experiments = [[experiments_step]]
     control = [['1', '2', '3', '4', '5', '6']]
     s = '#!/bin/bash\n'
     k = 0
     for i in range(len(data_names)):
         data_name = data_names[i]
-        controls = script_name + [[data_name]] + model_names + init_seeds + num_epochs + num_experiments + control
+        controls = script_name + [[data_name]] + model_names + init_seeds + num_experiments + num_epochs + \
+                   resume_mode + control
         controls = list(itertools.product(*controls))
         for j in range(len(controls)):
             controls[j] = list(controls[j])
