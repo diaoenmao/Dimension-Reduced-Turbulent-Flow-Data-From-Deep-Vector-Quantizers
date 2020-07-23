@@ -35,7 +35,7 @@ def main():
     num_epochs = [[num_epochs]]
     resume_mode = [[resume_mode]]
     num_experiments = [[experiments_step]]
-    control_name = [['1', '2', '3', '4', '5', '6'], ['0', '1']]
+    control_name = [['1', '2', '3', '4', '5', '6'], ['physics', 'exact'], ['0', '1']]
     control_names = [['_'.join(x) for x in itertools.product(*control_name)]]
     s = '#!/bin/bash\n'
     k = 0

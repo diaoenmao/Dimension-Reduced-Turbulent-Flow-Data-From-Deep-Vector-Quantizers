@@ -23,3 +23,13 @@ def spectral_derivative_3d(V):
     dV_dd = torch.irfft(V_fft_hat * mesh_d.unsqueeze(-1), signal_ndim=3, onesided=False)
     dV = torch.stack([dV_dh, dV_dw, dV_dd], dim=2)
     return dV
+
+
+def physics(A):
+    A11, A22, A33 = A[:, 0, 0], A[:, 1, 1], A[:, 2, 2]
+    continuity = (A11 + A22 + A33).mean()
+    S = 0.5 * (A + A.transpose(1, 2))
+    R = 0.5 * (A - A.transpose(1, 2))
+    flow = (S - R).mean()
+    output = continuity + flow
+    return output

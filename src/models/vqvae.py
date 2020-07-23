@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from config import cfg
 from modules import VectorQuantization
-from .utils import init_param, spectral_derivative_3d
+from .utils import init_param, spectral_derivative_3d, physics
 
 Normalization = nn.BatchNorm3d
 Activation = nn.ReLU
@@ -89,7 +89,7 @@ class Decoder(nn.Module):
 
 class VQVAE(nn.Module):
     def __init__(self, input_size=3, hidden_size=128, depth=3, num_res_block=2, res_size=32, embedding_size=64,
-                 num_embedding=512, d_commit=1, vq_commit=0.25):
+                 num_embedding=512, d_mode='sr', d_commit=1, vq_commit=0.25):
         super().__init__()
         self.upsampler, self.encoder, self.encoder_conv, self.quantizer, self.decoder = [], [], [], [], []
         for i in range(depth):
@@ -119,6 +119,7 @@ class VQVAE(nn.Module):
         self.quantizer = nn.ModuleList(self.quantizer)
         self.decoder = nn.ModuleList(self.decoder)
         self.depth = depth
+        self.d_mode = d_mode
         self.d_commit = d_commit
         self.vq_commit = vq_commit
 
@@ -165,9 +166,16 @@ class VQVAE(nn.Module):
         decoded = self.decode(quantized)
         output['uvw'] = decoded
         output['duvw'] = spectral_derivative_3d(output['uvw'])
-        output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + \
-                         self.d_commit * F.mse_loss(output['duvw'], input['duvw']) + \
-                         self.vq_commit * (sum(diff) / len(diff))
+        if self.d_mode == 'physics':
+            output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + \
+                             self.d_commit * physics(output['duvw']) + \
+                             self.vq_commit * (sum(diff) / len(diff))
+        elif self.d_mode == 'exact':
+            output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + \
+                             self.d_commit * F.mse_loss(output['duvw'], input['duvw']) + \
+                             self.vq_commit * (sum(diff) / len(diff))
+        else:
+            raise ValueError('Not valid d_mode')
         return output
 
 
@@ -179,10 +187,11 @@ def vqvae():
     res_size = cfg['vqvae']['res_size']
     embedding_size = cfg['vqvae']['embedding_size']
     num_embedding = cfg['vqvae']['num_embedding']
+    d_mode = cfg['d_mode']
     d_commit = cfg['d_commit']
     vq_commit = cfg['vqvae']['vq_commit']
     model = VQVAE(input_size=data_shape[0], hidden_size=hidden_size, depth=depth, num_res_block=num_res_block,
                   res_size=res_size, embedding_size=embedding_size, num_embedding=num_embedding,
-                  d_commit=d_commit, vq_commit=vq_commit)
+                  d_mode=d_mode, d_commit=d_commit, vq_commit=vq_commit)
     model.apply(init_param)
     return model

@@ -102,6 +102,7 @@ def process_dataset(dataset):
 
 def process_control():
     cfg['depth'] = int(cfg['control']['depth'])
+    cfg['d_mode'] = str(cfg['control']['d_mode'])
     cfg['d_commit'] = float(cfg['control']['d_commit'])
     if cfg['data_name'] in ['Turb']:
         cfg['data_shape'] = [3, 128, 128, 128]
