@@ -30,6 +30,8 @@ def physics(A):
     continuity = (A11 + A22 + A33).mean()
     S = 0.5 * (A + A.transpose(1, 2))
     R = 0.5 * (A - A.transpose(1, 2))
-    flow = (S - R).mean()
+    S_ijS_ij = (S * S).sum(dim=[1, 2])
+    R_ijR_ij = (R * R).sum(dim=[1, 2])
+    flow = (S_ijS_ij - R_ijR_ij).mean()
     output = continuity + flow
     return output
