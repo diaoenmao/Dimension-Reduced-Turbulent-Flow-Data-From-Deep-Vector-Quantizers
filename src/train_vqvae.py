@@ -112,6 +112,8 @@ def train(data_loader, model, optimizer, logger, epoch):
         output['loss'].backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
+        evaluation = metric.evaluate(cfg['metric_name']['train'], input, output)
+        logger.append(evaluation, 'train', n=input_size)
         if i % int((len(data_loader) * cfg['log_interval']) + 1) == 0:
             batch_time = time.time() - start_time
             lr = optimizer.param_groups[0]['lr']
@@ -123,8 +125,6 @@ def train(data_loader, model, optimizer, logger, epoch):
                              'Learning rate: {}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train', mean=False)
-            evaluation = metric.evaluate(cfg['metric_name']['train'], input, output)
-            logger.append(evaluation, 'train', n=input_size)
             logger.write('train', cfg['metric_name']['train'])
     return
 
