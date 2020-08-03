@@ -36,18 +36,21 @@ def runExperiment():
     dataset = fetch_dataset(cfg['data_name'], cfg['subset'])
     process_dataset(dataset['train'])
     data_loader = make_data_loader(dataset)
-    if 'pixelcnn' in cfg['model_name']:
-        ae = eval('models.{}().to(cfg["device"])'.format(cfg['ae_name']))
-    else:
-        ae = None
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
-    summary = summarize(data_loader['train'], model, ae)
+    summary = summarize(data_loader['train'], model)
     content = parse_summary(summary)
     print(content)
     return
 
 
-def summarize(data_loader, model, ae=None):
+def make_size(input):
+    if isinstance(input, tuple):
+        return make_size(input[0])
+    else:
+        return list(input[0].size())
+
+
+def summarize(data_loader, model):
     def register_hook(module):
 
         def hook(module, input, output):
@@ -63,8 +66,8 @@ def summarize(data_loader, model, ae=None):
                 summary['module'][key]['input_size'] = []
                 summary['module'][key]['output_size'] = []
                 summary['module'][key]['params'] = {}
-            input_size = list(input[0].size()) if isinstance(input, tuple) else list(input.size())
-            output_size = list(output[0].size()) if isinstance(output, tuple) else list(output.size())
+            input_size = make_size(input)
+            output_size = make_size(output)
             summary['module'][key]['input_size'].append(input_size)
             summary['module'][key]['output_size'].append(output_size)
             for name, param in module.named_parameters():
@@ -130,9 +133,6 @@ def summarize(data_loader, model, ae=None):
     for i, input in enumerate(data_loader):
         input = collate(input)
         input = to_device(input, cfg['device'])
-        if ae is not None:
-            with torch.no_grad():
-                input['img'] = ae.encode(input).detach()
         model(input)
         break
     for h in hooks:
