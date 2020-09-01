@@ -308,13 +308,95 @@ def Compute_VG_Statistics(List_VG):
                           'VS':VortexStret ,'SijSkjSji':SijSkjSji}
     return Dict_VG_Stat_Outputs  
 
+def K2_modified(Ng=128):
+    kk = np.fft.fftfreq (Ng , 1./ Ng).astype(int)  
+    K = np.array ( np.meshgrid ( kk , kk , kk ,indexing ='ij') , dtype = int )
+    K2 = np.sum( K*K , 0, dtype = int )
+    return np.where (K2 == 0, 1, K2 ).astype( float )
+K2_m=K2_modified()
+def filtering_Gaussian(Phy_Sig,factor_I_L=[1e-16, 1/4, 1/2][0],\
+                   K2_m=K2_m,Coef_Gauss_Filter=0.5,Ng=128, eta=1.46/55.8, L=1.48):
+    """
+    Input: Signal, filter width ([1e-16: no fliter , 1/4: inertial scales , 1/2: large scales])
+    Ouput: Filtered Signal, MSE between the input and filtered input
+    """
+
+    cut_off_freq=(2*np.pi/(factor_I_L*L)) #1*(0.1)*(factor_I_L)/(eta)    
+    
+    Gaussina_LPF=np.exp(-Coef_Gauss_Filter*K2_m/(cut_off_freq**2))
+    
+    Spec_Sig=np.fft.fftn(Phy_Sig)
+    filtered_Phy_Sig=np.real(np.fft.ifftn( np.multiply(Gaussina_LPF,Spec_Sig) )) 
+    
+    MSE_filtered=np.mean((filtered_Phy_Sig-Phy_Sig)**2)
+    
+    return filtered_Phy_Sig,MSE_filtered
+
+def Filtered_Field(u,v,w):
+    """
+    input: 3 components of velocity field
+    output: a dictionary containing intertial and large scales of input signals
+    example: Filtered_Dict[name+'_LargeScales'][0] and Filtered_Dict[name+'_LargeScales'][1] \
+    outputs large scale field and its MSE (compared to the original field), respectively
+    
+    
+    """
+    Filtered_Dict={}
+    for vel,name in zip([u,v,w],['U','V','W']):
+        Filtered_Dict[name+'_NoFilter']=vel,0.0
+        Filtered_Dict[name+'_InertialScales']=filtering_Gaussian(vel,factor_I_L=[1e-16, 1/4, 1/2][1])
+        Filtered_Dict[name+'_LargeScales']=filtering_Gaussian(vel,factor_I_L=[1e-16, 1/4, 1/2][2])
+    return Filtered_Dict
+
+
+def Filtered_VG(List_VG):
+    """
+    input: a list consists of 9 components of velocity gradient tensor
+    output: a dictionary containing intertial and large scales of input signals
+    example: Filtered_Dict[name+'_LargeScales'][0] and Filtered_Dict[name+'_LargeScales'][1] \
+    outputs large scale field and its MSE (compared to the original field), respectively
+    
+    """
+    str_list_var=['dUdx_Phy','dUdy_Phy','dUdz_Phy','dVdx_Phy','dVdy_Phy','dVdz_Phy','dWdx_Phy','dWdy_Phy','dWdz_Phy']
+    
+    Filtered_Dict={}
+    for vel_g,name in zip(List_VG,str_list_var):
+        Filtered_Dict[name+'_NoFilter']=vel_g,0.0
+        Filtered_Dict[name+'_InertialScales']=filtering_Gaussian(vel_g,factor_I_L=[1e-16, 1/4, 1/2][1])
+        Filtered_Dict[name+'_LargeScales']=filtering_Gaussian(vel_g,factor_I_L=[1e-16, 1/4, 1/2][2])
+        
+    # compute VG statistics 
+    ## for NoFilter
+    Dict_VG_Stat_Outputs={}
+    Dict_VG_Stat_Outputs=Compute_VG_Statistics([Filtered_Dict[item+'_NoFilter'][0] for item in str_list_var])    
+    for item in Dict_VG_Stat_Outputs:
+        Filtered_Dict[item+'_NoFilter']=Dict_VG_Stat_Outputs[item]        
+    ### for InertialScales
+    Dict_VG_Stat_Outputs={}
+    Dict_VG_Stat_Outputs=Compute_VG_Statistics([Filtered_Dict[item+'_InertialScales'][0] for item in str_list_var])    
+    for item in Dict_VG_Stat_Outputs:
+        Filtered_Dict[item+'_InertialScales']=Dict_VG_Stat_Outputs[item]    
+    #### for LargeScales
+    Dict_VG_Stat_Outputs={}
+    Dict_VG_Stat_Outputs=Compute_VG_Statistics([Filtered_Dict[item+'_LargeScales'][0] for item in str_list_var])    
+    for item in Dict_VG_Stat_Outputs:
+        Filtered_Dict[item+'_LargeScales']=Dict_VG_Stat_Outputs[item] 
+    
+    #print(Filtered_Dict.keys())
+    
+    return Filtered_Dict
+
+
 
 def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
+    from matplotlib.pyplot import contour,contourf
+    import scipy.stats as stats
+
     input_uvw = input['uvw'].cpu().numpy()
     input_duvw = input['duvw'].cpu().numpy()
     output_uvw = output['uvw'].cpu().numpy()
     output_duvw = output['duvw'].cpu().numpy()
-    import scipy.stats as stats
+    
     j_d_min, j_d_max = 0, 128
     k_d_min, k_d_max = 0, 128
     label = ['U', 'V', 'W']
@@ -407,6 +489,7 @@ def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
     makedir_exist_ok(path)
     fig.savefig('{}/EnergySpectrum_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
                 fontsize=fontsize)
+    plt.close()
     
     # Velocity Gradient Statistics
     VG_Stat_Original=VG_Stat_Recons={}
@@ -422,7 +505,7 @@ def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
     O_color='blue'
     R_color='red'
     camp='viridis'#'hot'
-    from matplotlib.pyplot import contour,contourf
+    
     fig = plt.figure(figsize=(12, 8))
     
     
@@ -456,7 +539,7 @@ def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
     makedir_exist_ok(path)
     fig.savefig('{}/RQ_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
                 fontsize=fontsize)
-    
+    plt.close()
     
     # Plot other VG statistics
     fig,axes=plt.subplots(nrows=1, ncols=2,figsize=(15,5))
@@ -484,7 +567,169 @@ def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
     
     plt.tight_layout()
     makedir_exist_ok(path)
-    fig.savefig('{}/VG_Statistics_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
+    fig.savefig('{}/VG_SummaryStatistics_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
                 fontsize=fontsize)
+    plt.close()
+    
+    # Filtering Statistics
+    Original_Filtered_Field=Filtered_Field(input_uvw[0, 0, :, :, :],input_uvw[0, 1, :, :, :],input_uvw[0, 2, :, :, :])    
+    Reconstructed_Filtered_Field=Filtered_Field(output_uvw[0, 0, :, :, :],output_uvw[0, 1, :, :, :],output_uvw[0, 2, :, :, :])
+    
+    
+    ## Plot U,V,W filtered
+    j_d_min, j_d_max = 0, 128
+    k_d_min, k_d_max = 0, 128
+    i_d_min=np.random.randint(0,Ng) # let's keep it random and not stick to a specific cross-section
+    xx = np.linspace(-5, 5, 1000)
+    yy = np.log10(stats.norm.pdf(xx, 0, 1))
+    
+    for Vel_comp in ['U','V','W']:
+        fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(20, 20))
+        for i,name in zip(range(3),['_NoFilter','_InertialScales','_LargeScales']):
+            plt.colorbar(ax[0][i].imshow(Original_Filtered_Field[Vel_comp+name][0][i_d_min:(i_d_min + 1), j_d_min:j_d_max,k_d_min:k_d_max].squeeze()), ax=ax[0][i], fraction=0.046, pad=0.04)
+            plt.colorbar(ax[1][i].imshow(Reconstructed_Filtered_Field[Vel_comp+name][0][i_d_min:(i_d_min + 1), j_d_min:j_d_max,k_d_min:k_d_max].squeeze()), ax=ax[1][i], fraction=0.046, pad=0.04)
+
+            ax[0][i].set_title('{} Original{}'.format(Vel_comp,name)\
+                           if i==0 else \
+                           '{} Original{} , MSE = {:.4f}'.\
+                           format(Vel_comp,name,Original_Filtered_Field[Vel_comp+name][1]), fontsize=fontsize)
+            ax[1][i].set_title('{} Reconstructed{}'.format(Vel_comp,name)\
+                           if i==0 else \
+                           '{} Reconstructed{} , MSE = {:.4f}'.\
+                           format(Vel_comp,name,Reconstructed_Filtered_Field[Vel_comp+name][1]), fontsize=fontsize)
+
+            x,y=Compute_1D_PDF(Original_Filtered_Field[Vel_comp+name][0],num_bins = num_bins) 
+
+            ax[2][i].plot(x, y, 'b', lw=2, label='{} Original{}'.format(Vel_comp,name))
+            x,y=Compute_1D_PDF(Reconstructed_Filtered_Field[Vel_comp+name][0],num_bins = num_bins)
+
+            ax[2][i].plot(x, y, 'g', lw=2, label='{} Reconstructed{}'.format(Vel_comp,name))
+            ax[2][i].set_xlim(-10, 10)
+            ax[2][i].set_ylim(-5, 0)
+            ax[2][i].set_xlabel('Normalized {}'.format(Vel_comp), fontsize=fontsize)
+            ax[2][i].set_ylabel('log10(pdf)', fontsize=fontsize)
+            ax[2][i].set_title('MSE = {:.4f}'.format(np.mean((Reconstructed_Filtered_Field[Vel_comp+name][0] - Original_Filtered_Field[Vel_comp+name][0]) ** 2)),
+                               fontsize=fontsize)
+            ax[2][i].grid(True)
+
+            ax[2][i].plot(xx, yy, 'r--', label="Gaussian")
+            ax[2][i].legend(fontsize=fontsize)
+        plt.tight_layout()
+        fig.savefig('{}/{}_Summary_{}.{}'.format(path, Vel_comp,cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
+                fontsize=fontsize)
+        
+        plt.close()
+    
+    
+    ## plot R-Q filtered
+    Original_Filtered_VG_Field=Filtered_VG([input_duvw[0, 0, 0, :, :, :],input_duvw[0, 0, 1, :, :, :],input_duvw[0, 0, 2, :, :, :],\
+                                           input_duvw[0, 1, 0, :, :, :],input_duvw[0, 1, 1, :, :, :],input_duvw[0, 1, 2, :, :, :],\
+                                           input_duvw[0, 2, 0, :, :, :],input_duvw[0, 2, 1, :, :, :],input_duvw[0, 2, 2, :, :, :]])
+    Reconstructed_Filtered_VG_Field=Filtered_VG([output_duvw[0, 0, 0, :, :, :],output_duvw[0, 0, 1, :, :, :],output_duvw[0, 0, 2, :, :, :],\
+                                       output_duvw[0, 1, 0, :, :, :],output_duvw[0, 1, 1, :, :, :],output_duvw[0, 1, 2, :, :, :],\
+                                       output_duvw[0, 2, 0, :, :, :],output_duvw[0, 2, 1, :, :, :],output_duvw[0, 2, 2, :, :, :]])
+    
+    ### 
+    for Scale in ['_NoFilter','_InertialScales','_LargeScales']:
+        fig = plt.figure(figsize=(12, 8))
+        X_M, Y_M, H=Compute_2D_PDF(Original_Filtered_VG_Field['R'+Scale], Original_Filtered_VG_Field['Q'+Scale])
+        SijSij_mean_t=np.mean(Original_Filtered_VG_Field['S_ijS_ij'+Scale])
+
+        contours =contour(X_M/SijSij_mean_t**(3/2), Y_M/SijSij_mean_t,H,levels=lev,\
+                          origin='lower', colors=4*(O_color,),linewidths=1,linestyles='solid')
+
+
+
+        X_M, Y_M, H=Compute_2D_PDF(Reconstructed_Filtered_VG_Field['R'+Scale], Reconstructed_Filtered_VG_Field['Q'+Scale])
+        SijSij_mean_t=np.mean(Reconstructed_Filtered_VG_Field['S_ijS_ij'+Scale])
+
+        contours =contour(X_M/SijSij_mean_t**(3/2), Y_M/SijSij_mean_t,H,levels=lev,\
+                          origin='lower', colors=4*(R_color,),linewidths=3,linestyles='--')
+
+
+
+        Rx=np.arange(-10,10,0.1)
+        plt.plot(Rx,-((27/4)*Rx**2)**(1/3),'k-',label='$Q=-(27R^2/4)^{1/3}$')
+        plt.legend(fontsize=15)
+
+        plt.xlabel(r"$R/(S_{ij}S_{ij})^{(3/2)}}$",fontsize=fontsize_label)
+        plt.ylabel(r"$Q/S_{ij}S_{ij}$",fontsize=fontsize_label)
+        plt.xlim([-extend,extend])
+        plt.ylim([-extend,extend])
+        plt.grid()
+        plt.title("R-Q"+Scale)
+        plt.tight_layout()
+        makedir_exist_ok(path)
+        fig.savefig('{}/RQ{}_{}.{}'.format(path, Scale, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
+                    fontsize=fontsize)
+        
+        plt.close()
+    
+  
+    
+    
+    #### Plot other Filtered VG statistics
+    x_st=0.1
+    y_st=1.75
+    step=0.3
+    fontsize_text=18
+    title=['Original', 'Reconstructed']
+    for Scale in ['_NoFilter','_InertialScales','_LargeScales']:
+        fig,axes=plt.subplots(nrows=1, ncols=2,figsize=(15,5))
+
+        i=0
+        for dic in [Original_Filtered_VG_Field,Reconstructed_Filtered_VG_Field]:
+
+            axes[i].scatter([0,1],[2,0],color='w')
+            axes[i].text(x_st,y_st,r'$|A_{ii}| = %.4e$'%np.mean(dic['Trace_A'+Scale]),fontsize=fontsize_text)
+            axes[i].text(x_st,y_st-1*step,r'$|S_{ij}S_{ij}| = %.4f$'%np.mean(dic['S_ijS_ij'+Scale]),fontsize=fontsize_text)
+            axes[i].text(x_st,y_st-2*step,r'$|R_{ij}R_{ij}| = %.4f$'%np.mean(dic['R_ijR_ij'+Scale]),fontsize=fontsize_text)
+            axes[i].text(x_st,y_st-3*step,r'$(-3/4)*|S_{ij}\omega_i\omega_j| = %.4f$'%((-3/4)*np.mean(dic['VS'+Scale])),fontsize=fontsize_text)
+            axes[i].text(x_st,y_st-4*step,r'$|S_{ij}S_{kj}S_{ji}| = %.4f$'%np.mean(dic['SijSkjSji'+Scale]),fontsize=fontsize_text)
+
+            axes[i].axes.xaxis.set_visible(False)
+            axes[i].axes.yaxis.set_visible(False)
+            axes[i].set_title("%s" %(title[i]+Scale),fontsize=fontsize_text)
+
+            i+=1
+
+
+        plt.tight_layout()
+        makedir_exist_ok(path)
+        fig.savefig('{}/VG{}_SummaryStatistics_{}.{}'.format(path,Scale, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
+                    fontsize=fontsize)
+        plt.close()
+    
+    label = [['dUdx', 'dUdy', 'dUdz'], ['dVdx', 'dVdy', 'dVdz'], ['dWdx', 'dWdy', 'dWdz']]
+    for Scale in ['_NoFilter','_InertialScales','_LargeScales']:
+        fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(20, 25))
+        fontsize = 15
+        for i in range(3):
+            for j in range(3):
+                x,y=Compute_1D_PDF(Original_Filtered_VG_Field[label[i][j]+'_Phy'+Scale][0],num_bins = num_bins)
+
+                ax[i][j].plot(x, y, 'g', lw=2, label='Original {}'.format(label[i][j]))            
+                x,y=Compute_1D_PDF(Reconstructed_Filtered_VG_Field[label[i][j]+'_Phy'+Scale][0],num_bins = num_bins)
+
+                ax[i][j].plot(x, y, 'b', lw=2, label='Reconstructed {}'.format(label[i][j]))
+                ax[i][j].set_title('{}{} MSE = {:.4f}'.format(label[i][j],Scale,\
+                                                         np.mean((Original_Filtered_VG_Field[label[i][j]+'_Phy'+Scale][0] -
+                                                                  Reconstructed_Filtered_VG_Field[label[i][j]+'_Phy'+Scale][0]) ** 2)), fontsize=fontsize)
+                ax[i][j].set_xlim(-10, 10)
+                ax[i][j].set_ylim(-5, 0)
+                ax[i][j].set_xlabel('Normalized {}'.format(label[i][j]), fontsize=fontsize)
+                ax[i][j].set_ylabel('log10(PDF)', fontsize=fontsize)
+                ax[i][j].grid(True)
+
+                ax[i][j].plot(xx, yy, 'r--', label="Gaussian")
+                ax[i][j].legend(fontsize=fontsize)
+        plt.tight_layout()
+        
+        makedir_exist_ok(path)
+        fig.savefig('{}/VG{}_PDF_{}.{}'.format(path,Scale, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
+                     fontsize=fontsize)
+        plt.close()
+
+    
     
     return
