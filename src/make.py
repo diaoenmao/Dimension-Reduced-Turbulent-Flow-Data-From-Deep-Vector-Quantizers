@@ -35,8 +35,8 @@ def main():
     num_epochs = [[num_epochs]]
     resume_mode = [[resume_mode]]
     num_experiments = [[experiments_step]]
-    exact_control_name = [['1', '2', '3', '4', '5', '6'], ['exact'], ['0', '1']]
-    physics_control_name = [['1', '2', '3', '4', '5', '6'], ['physics'], ['1']]
+    exact_control_name = [['3'], ['exact'], ['0', '1']]
+    physics_control_name = [['3'], ['physics'], ['1']]
     control_name = [exact_control_name, physics_control_name]
     control_names = []
     for i in range(len(control_name)):
@@ -53,8 +53,10 @@ def main():
                 '--num_experiments {} --num_epochs {} --resume_mode {} --control_name {}&\n'.format(
             gpu_ids[k % len(gpu_ids)], *controls[i])
         if k % round == round - 1:
-            s = s[:-2] + '\n'
+            s = s[:-2] + '\nwait\n'
         k = k + 1
+    if s[-5:-1] != 'wait':
+        s = s + 'wait\n'
     print(s)
     run_file = open('./{}.sh'.format(filename), 'w')
     run_file.write(s)

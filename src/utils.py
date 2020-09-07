@@ -107,15 +107,8 @@ def process_control():
     cfg['d_commit'] = float(cfg['control']['d_commit'])
     if cfg['data_name'] in ['Turb']:
         cfg['data_shape'] = [3, 128, 128, 128]
-    if cfg['data_name'] in ['Turb']:
-        cfg['vqvae'] = {}
-        cfg['vqvae']['hidden_size'] = 128
-        cfg['vqvae']['num_res_block'] = 2
-        cfg['vqvae']['res_size'] = 32
-        cfg['vqvae']['embedding_size'] = 64
-        cfg['vqvae']['num_embedding'] = 512
-        cfg['vqvae']['vq_commit'] = 1
-        cfg['vqvae']['d_commit'] = 1
+        cfg['vqvae'] = {'hidden_size': 128, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
+                        'num_embedding': 512, 'vq_commit': 1}
         cfg['batch_size'] = {'train': 1, 'test': 1}
         cfg['optimizer_name'] = 'Adam'
         cfg['lr'] = 1e-3
