@@ -4,9 +4,9 @@ import torch.nn as nn
 
 
 def init_param(m):
-    if isinstance(m, (nn.BatchNorm3d)):
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0.0)
+    if isinstance(m, (nn.BatchNorm3d, nn.InstanceNorm3d)):
+        m.weight.data.fill_(1)
+        m.bias.data.zero_()
     return m
 
 

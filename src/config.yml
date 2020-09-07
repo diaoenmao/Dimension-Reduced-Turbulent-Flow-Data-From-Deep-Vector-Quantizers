@@ -46,5 +46,5 @@ device: cuda
 world_size: 1
 resume_mode: 0
 # other
-show: True
+show: False
 fig_format: png

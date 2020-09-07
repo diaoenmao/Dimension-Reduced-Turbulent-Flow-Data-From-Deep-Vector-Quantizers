@@ -23,8 +23,6 @@ if args['control_name']:
     cfg['control'] = {k: v for k, v in zip(cfg['control'].keys(), args['control_name'].split('_'))} \
         if args['control_name'] != 'None' else {}
 cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
-if cfg['data_name'] in ['Turb']:
-    cfg['batch_size'] = {'train': 1, 'test': 1}
 cfg['metric_name'] = {'train': ['Loss', 'MSE', 'D_MSE'], 'test': ['Loss', 'MSE', 'D_MSE']}
 
 

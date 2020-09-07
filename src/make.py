@@ -35,8 +35,13 @@ def main():
     num_epochs = [[num_epochs]]
     resume_mode = [[resume_mode]]
     num_experiments = [[experiments_step]]
-    control_name = [['1', '2', '3', '4', '5', '6'], ['physics', 'exact'], ['0', '1']]
-    control_names = [['_'.join(x) for x in itertools.product(*control_name)]]
+    exact_control_name = [['1', '2', '3', '4', '5', '6'], ['exact'], ['0', '1']]
+    physics_control_name = [['1', '2', '3', '4', '5', '6'], ['physics'], ['1']]
+    control_name = [exact_control_name, physics_control_name]
+    control_names = []
+    for i in range(len(control_name)):
+        control_names.extend(list('_'.join(x) for x in itertools.product(*control_name[i])))
+    control_names = [control_names]
     s = '#!/bin/bash\n'
     k = 0
     controls = script_name + data_names + model_names + init_seeds + num_experiments + num_epochs + \

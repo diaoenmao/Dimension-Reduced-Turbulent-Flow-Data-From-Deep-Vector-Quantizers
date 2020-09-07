@@ -10,7 +10,8 @@ import torch.optim as optim
 from config import cfg
 from data import fetch_dataset, make_data_loader
 from metrics import Metric
-from utils import save, to_device, process_control, process_dataset, resume, collate, vis
+from utils import save, to_device, process_control, process_dataset, make_optimizer, make_scheduler, resume, collate, \
+    vis
 from logger import Logger
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -28,14 +29,7 @@ if args['control_name']:
 cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
 cfg['pivot_metric'] = 'MSE'
 cfg['pivot'] = float('inf')
-if cfg['data_name'] in ['Turb']:
-    cfg['batch_size'] = {'train': 1, 'test': 1}
 cfg['metric_name'] = {'train': ['Loss', 'MSE', 'D_MSE'], 'test': ['Loss', 'MSE', 'D_MSE']}
-cfg['optimizer_name'] = 'Adam'
-cfg['lr'] = 1e-3
-cfg['weight_decay'] = 1e-4
-cfg['scheduler_name'] = 'ReduceLROnPlateau'
-cfg['show'] = False
 
 
 def main():
