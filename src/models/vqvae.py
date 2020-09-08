@@ -86,7 +86,7 @@ class Decoder(nn.Module):
 
 class VQVAE(nn.Module):
     def __init__(self, input_size=3, hidden_size=128, depth=3, num_res_block=2, res_size=32, embedding_size=64,
-                 num_embedding=512, d_mode='exact', d_commit=1, vq_commit=0.25):
+                 num_embedding=512, d_mode='exact', d_commit=None, vq_commit=0.25):
         super().__init__()
         self.upsampler, self.encoder, self.encoder_conv, self.quantizer, self.decoder = [], [], [], [], []
         for i in range(depth):
@@ -163,16 +163,14 @@ class VQVAE(nn.Module):
         decoded = self.decode(quantized)
         output['uvw'] = decoded
         output['duvw'] = spectral_derivative_3d(output['uvw'])
-        if self.d_mode == 'physics':
-            output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + \
-                             self.d_commit * physics(output['duvw']) + \
-                             self.vq_commit * (sum(diff) / len(diff))
-        elif self.d_mode == 'exact':
-            output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + \
-                             self.d_commit * F.mse_loss(output['duvw'], input['duvw']) + \
-                             self.vq_commit * (sum(diff) / len(diff))
-        else:
-            raise ValueError('Not valid d_mode')
+        output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + self.vq_commit * (sum(diff) / len(diff))
+        for i in range(len(self.d_mode)):
+            if self.d_mode[i] == 'exact':
+                output['loss'] += self.d_commit[i] * F.mse_loss(output['duvw'], input['duvw'])
+            elif self.d_mode[i] == 'physics':
+                output['loss'] += self.d_commit[i] * physics(output['duvw'])
+            else:
+                raise ValueError('Not valid d_mode')
         return output
 
 

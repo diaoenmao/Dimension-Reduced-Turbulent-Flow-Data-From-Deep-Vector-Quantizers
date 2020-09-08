@@ -103,8 +103,8 @@ def process_dataset(dataset):
 
 def process_control():
     cfg['depth'] = int(cfg['control']['depth'])
-    cfg['d_mode'] = str(cfg['control']['d_mode'])
-    cfg['d_commit'] = float(cfg['control']['d_commit'])
+    cfg['d_mode'] = [str(x) for x in cfg['control']['d_mode'].split('-')]
+    cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
     if cfg['data_name'] in ['Turb']:
         cfg['data_shape'] = [3, 128, 128, 128]
         cfg['vqvae'] = {'hidden_size': 128, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
