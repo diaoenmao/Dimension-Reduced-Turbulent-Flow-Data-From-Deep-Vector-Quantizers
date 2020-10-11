@@ -51,12 +51,15 @@ def runExperiment():
 def encode(data_loader, model):
     with torch.no_grad():
         model.train(False)
-        code = []
+        code = [[] for _ in range(cfg['vqvae']['depth'])]
         for i, input in enumerate(data_loader):
             input = collate(input)
             input = to_device(input, cfg['device'])
-            code_i = model.encode(input)
-            code.append(code_i)
+            _, _, code_i = model.encode(input['uvw'])
+            for j in range(len(code)):
+                code[j].append(code_i[j])
+        for i in range(len(code)):
+            code[i] = torch.cat(code[i], dim=0)
     return code
 
 

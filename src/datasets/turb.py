@@ -115,8 +115,6 @@ class Turb(Dataset):
             save(duvw, os.path.join(self.raw_folder, '{}_d.pkl'.format(test_ts[i])))
             test_uvw.append(os.path.join(self.raw_folder, '{}.pkl'.format(test_ts[i])))
             test_duvw.append(os.path.join(self.raw_folder, '{}_d.pkl'.format(test_ts[i])))
-        train_uvw_result = {'ts': train_ts[:-1], 'uvw': train_uvw[:-1], 'duvw': train_duvw[:-1]}
-        train_nuvw_result = {'ts': train_ts[1:], 'uvw': train_uvw[:-1], 'nuvw': train_uvw[1:], 'dnuvw': train_duvw[1:]}
-        test_uvw_result = {'ts': test_ts[:-1], 'uvw': test_uvw[:-1], 'duvw': test_duvw[:-1]}
-        test_nuvw_result = {'ts': test_ts[1:], 'uvw': test_uvw[:-1], 'nuvw': test_uvw[1:], 'dnuvw': test_duvw[1:]}
-        return {'uvw': train_uvw_result, 'nuvw': train_nuvw_result}, {'uvw': test_uvw_result, 'nuvw': test_nuvw_result}
+        train_uvw_result = {'ts': train_ts, 'uvw': train_uvw, 'duvw': train_duvw}
+        test_uvw_result = {'ts': test_ts, 'uvw': test_uvw, 'duvw': test_duvw}
+        return {'uvw': train_uvw_result}, {'uvw': test_uvw_result}

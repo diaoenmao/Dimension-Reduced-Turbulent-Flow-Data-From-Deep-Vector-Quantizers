@@ -1,7 +1,6 @@
 ---
 # control
 control:
-  depth: '3'
   d_mode: 'exact-physics'
   d_commit: '0.01-0.001'
 # data

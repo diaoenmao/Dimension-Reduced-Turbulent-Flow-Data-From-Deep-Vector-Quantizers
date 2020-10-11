@@ -102,17 +102,16 @@ def process_dataset(dataset):
 
 
 def process_control():
-    cfg['depth'] = int(cfg['control']['depth'])
     cfg['d_mode'] = [str(x) for x in cfg['control']['d_mode'].split('-')]
     cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
     if cfg['data_name'] in ['Turb']:
         cfg['data_shape'] = [3, 128, 128, 128]
-        cfg['vqvae'] = {'hidden_size': 128, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
+        cfg['vqvae'] = {'hidden_size': 128, 'depth': 3, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
                         'num_embedding': 512, 'vq_commit': 1}
         cfg['batch_size'] = {'train': 1, 'test': 1}
         cfg['optimizer_name'] = 'Adam'
         cfg['lr'] = 1e-3
-        cfg['weight_decay'] = 1e-4
+        cfg['weight_decay'] = 5e-4
         cfg['scheduler_name'] = 'ReduceLROnPlateau'
     return
 
@@ -159,17 +158,17 @@ class Stats(object):
         return
 
 
-def make_optimizer(model, lr):
+def make_optimizer(model):
     if cfg['optimizer_name'] == 'SGD':
-        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=cfg['momentum'],
+        optimizer = optim.SGD(model.parameters(), lr=cfg['lr'], momentum=cfg['momentum'],
                               weight_decay=cfg['weight_decay'])
     elif cfg['optimizer_name'] == 'RMSprop':
-        optimizer = optim.RMSprop(model.parameters(), lr=lr, momentum=cfg['momentum'],
+        optimizer = optim.RMSprop(model.parameters(), lr=cfg['lr'], momentum=cfg['momentum'],
                                   weight_decay=cfg['weight_decay'])
     elif cfg['optimizer_name'] == 'Adam':
-        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=cfg['weight_decay'])
+        optimizer = optim.Adam(model.parameters(), lr=cfg['lr'], weight_decay=cfg['weight_decay'])
     elif cfg['optimizer_name'] == 'Adamax':
-        optimizer = optim.Adamax(model.parameters(), lr=lr, weight_decay=cfg['weight_decay'])
+        optimizer = optim.Adamax(model.parameters(), lr=cfg['lr'], weight_decay=cfg['weight_decay'])
     else:
         raise ValueError('Not valid optimizer name')
     return optimizer
