@@ -7,9 +7,9 @@ import time
 import torch
 import torch.backends.cudnn as cudnn
 from config import cfg
-from data import fetch_dataset
+from data import BatchDataset
 from metrics import Metric
-from utils import save, to_device, process_control, process_dataset, make_optimizer, make_scheduler, resume
+from utils import save, load, to_device, process_control, process_dataset, make_optimizer, make_scheduler, resume
 from logger import Logger
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -24,17 +24,20 @@ for k in cfg:
 if args['control_name']:
     cfg['control'] = {k: v for k, v in zip(cfg['control'].keys(), args['control_name'].split('_'))} \
         if args['control_name'] != 'None' else {}
-cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
+cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']]) if 'control' in cfg else ''
 cfg['pivot_metric'] = 'Loss'
 cfg['pivot'] = float('inf')
 cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss']}
 cfg['ae_name'] = 'vqvae'
 
+
 def main():
     process_control()
     seeds = list(range(cfg['init_seed'], cfg['init_seed'] + cfg['num_experiments']))
     for i in range(cfg['num_experiments']):
+        ae_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['ae_name'], cfg['control_name']]
         model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], cfg['control_name']]
+        cfg['ae_tag'] = '_'.join([x for x in ae_tag_list if x])
         cfg['model_tag'] = '_'.join([x for x in model_tag_list if x])
         print('Experiment: {}'.format(cfg['model_tag']))
         runExperiment()
@@ -45,11 +48,12 @@ def runExperiment():
     seed = int(cfg['model_tag'].split('_')[0])
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    dataset = fetch_dataset(cfg['data_name'], cfg['subset'])
+    dataset = {}
+    dataset['train'] = load('./output/code/train_{}.pt'.format(cfg['ae_tag']))
+    dataset['test'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
     process_dataset(dataset)
-    ae = eval('models.{}().to(cfg["device"])'.format(cfg['ae_name']))
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
-    optimizer = make_optimizer(model, cfg['lr'])
+    optimizer = make_optimizer(model)
     scheduler = make_scheduler(optimizer)
     if cfg['resume_mode'] == 1:
         last_epoch, model, optimizer, scheduler, logger = resume(model, cfg['model_tag'], optimizer, scheduler)
@@ -96,14 +100,18 @@ def train(dataset, model, optimizer, logger, epoch):
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
     for i, input in enumerate(dataset):
-        input_size = input['label'].size(0)
-        input = to_device(input, cfg['device'])
+        loss = []
+        input_size = input[0]['code'].size(0)
         optimizer.zero_grad()
-        output = model(input)
-        output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-        output['loss'].backward()
+        for j in range(len(input)):
+            input[j] = to_device(input[j], cfg['device'])
+            output = model[j](input[j])
+            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
+            output['loss'].backward()
+            loss.append(output['loss'])
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
+        output = {'loss': sum(loss) / len(input)}
         evaluation = metric.evaluate(cfg['metric_name']['train'], input, output)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(dataset) * cfg['log_interval']) + 1) == 0:
@@ -127,10 +135,14 @@ def test(dataset, model, logger, epoch):
         model.train(False)
         dataset = BatchDataset(dataset, cfg['bptt'])
         for i, input in enumerate(dataset):
-            input_size = input['label'].size(0)
-            input = to_device(input, cfg['device'])
-            output = model(input)
-            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
+            loss = []
+            input_size = input[0]['code'].size(0)
+            for j in range(len(input)):
+                input[j] = to_device(input[j], cfg['device'])
+                output = model[j](input[j])
+                output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
+                loss.append(output['loss'])
+            output = {'loss': sum(loss) / len(input)}
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
             logger.append(evaluation, 'test', input_size)
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}

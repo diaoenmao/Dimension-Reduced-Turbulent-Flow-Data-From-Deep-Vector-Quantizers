@@ -2,6 +2,7 @@ import torch
 import datasets
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
+from torch.utils.data import Dataset
 from config import cfg
 
 
@@ -36,3 +37,21 @@ def make_data_loader(dataset):
                                                      batch_size=cfg['batch_size'][k], pin_memory=True,
                                                      num_workers=cfg['num_workers'], collate_fn=input_collate)
     return data_loader
+
+
+class BatchDataset(Dataset):
+    def __init__(self, dataset, seq_length):
+        super().__init__()
+        self.dataset = dataset
+        self.seq_length = seq_length
+        self.S = dataset[0].size(1)
+        self.idx = list(range(0, self.S - 1, seq_length))
+
+    def __len__(self):
+        return len(self.idx)
+
+    def __getitem__(self, index):
+        seq_length = min(self.seq_length, self.S - 1 - index)
+        input = [{'code': self.dataset[i][:, self.idx[index]:self.idx[index] + seq_length]} for i in
+                 range(len(self.dataset))]
+        return input

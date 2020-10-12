@@ -25,7 +25,7 @@ for k in cfg:
 if args['control_name']:
     cfg['control'] = {k: v for k, v in zip(cfg['control'].keys(), args['control_name'].split('_'))} \
         if args['control_name'] != 'None' else {}
-cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
+cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']]) if 'control' in cfg else ''
 cfg['pivot_metric'] = 'MSE'
 cfg['pivot'] = float('inf')
 cfg['metric_name'] = {'train': ['Loss', 'MSE', 'D_MSE', 'Physics'], 'test': ['Loss', 'MSE', 'D_MSE', 'Physics']}

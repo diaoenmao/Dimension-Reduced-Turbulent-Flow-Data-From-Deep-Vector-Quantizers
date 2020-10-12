@@ -20,6 +20,7 @@ if args['control_name']:
     cfg['control'] = {k: v for k, v in zip(cfg['control'].keys(), args['control_name'].split('_'))} \
         if args['control_name'] != 'None' else {}
 cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
+cfg['shuffle'] = {'train': False, 'test': False}
 
 
 def main():
@@ -43,8 +44,10 @@ def runExperiment():
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     load_tag = 'best'
     last_epoch, model, _, _, _ = resume(model, cfg['model_tag'], load_tag=load_tag)
-    code = encode(data_loader['train'], model)
-    save(code, './output/code/{}.pt'.format(cfg['model_tag']))
+    train_code = encode(data_loader['train'], model)
+    test_code = encode(data_loader['test'], model)
+    save(train_code, './output/code/train_{}.pt'.format(cfg['model_tag']))
+    save(test_code, './output/code/test_{}.pt'.format(cfg['model_tag']))
     return
 
 

@@ -131,15 +131,17 @@ class Decoder(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, num_tokens, embedding_size, num_heads, hidden_size, num_layers, dropout):
+    def __init__(self, num_embedding, embedding_size, num_heads, hidden_size, num_layers, dropout):
         super().__init__()
-        self.num_tokens = num_tokens
-        self.transformer_embedding = TransformerEmbedding(num_tokens, embedding_size, dropout)
+        self.num_embedding = num_embedding
+        self.transformer_embedding = TransformerEmbedding(num_embedding, embedding_size, dropout)
         encoder_layers = TransformerEncoderLayer(embedding_size, num_heads, hidden_size, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, num_layers)
-        self.decoder = Decoder(num_tokens, embedding_size)
+        self.decoder = Decoder(num_embedding, embedding_size)
 
     def forward(self, input):
+        print('aa')
+        exit()
         output = {}
         src = input['label'].clone()
         N, S = src.size()
@@ -150,22 +152,20 @@ class Transformer(nn.Module):
         src = self.transformer_encoder(src)
         out = self.decoder(src)
         out = out.permute(0, 2, 1)
-        if 'label_split' in input:
-            label_mask = torch.zeros((cfg['num_tokens'], 1), device=out.device)
-            label_mask[input['label_split']] = 1
-            out = out.masked_fill(label_mask == 0, 0)
         output['score'] = out
         output['loss'] = F.cross_entropy(output['score'], input['label'])
         return output
 
 
-def transformer(model_rate=1):
-    num_tokens = cfg['num_tokens']
-    embedding_size = int(np.ceil(model_rate * cfg['transformer']['embedding_size']))
+def transformer():
+    depth = cfg[cfg['ae_name']]['depth']
+    num_embedding = cfg[cfg['ae_name']]['num_embedding']
+    embedding_size = cfg['transformer']['embedding_size']
     num_heads = cfg['transformer']['num_heads']
-    hidden_size = int(np.ceil(model_rate * cfg['transformer']['hidden_size']))
+    hidden_size = cfg['transformer']['hidden_size']
     num_layers = cfg['transformer']['num_layers']
     dropout = cfg['transformer']['dropout']
-    model = Transformer(num_tokens, embedding_size, num_heads, hidden_size, num_layers, dropout)
+    model = nn.ModuleList([Transformer(num_embedding, embedding_size, num_heads, hidden_size, num_layers, dropout)
+                           for _ in range(depth)])
     model.apply(init_param)
     return model

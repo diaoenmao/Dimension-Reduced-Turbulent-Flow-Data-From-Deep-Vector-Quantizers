@@ -98,21 +98,41 @@ def recur(fn, input, *args):
 
 
 def process_dataset(dataset):
+    if cfg['model_name'] in ['transformer']:
+        for split in dataset:
+            for i in range(len(dataset[split])):
+                dataset[split][i] = batchify(dataset[split][i], cfg['batch_size'][split])
     return
 
 
 def process_control():
     cfg['d_mode'] = [str(x) for x in cfg['control']['d_mode'].split('-')]
     cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
+    cfg['vqvae'] = {'hidden_size': 128, 'depth': 3, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
+                    'num_embedding': 512, 'vq_commit': 1}
+    cfg['transformer'] = {'embedding_size': 256, 'num_heads': 4, 'hidden_size': 512, 'num_layers': 4,
+                          'dropout': 0.2}
     if cfg['data_name'] in ['Turb']:
-        cfg['data_shape'] = [3, 128, 128, 128]
-        cfg['vqvae'] = {'hidden_size': 128, 'depth': 3, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
-                        'num_embedding': 512, 'vq_commit': 1}
-        cfg['batch_size'] = {'train': 1, 'test': 1}
-        cfg['optimizer_name'] = 'Adam'
-        cfg['lr'] = 1e-3
-        cfg['weight_decay'] = 5e-4
-        cfg['scheduler_name'] = 'ReduceLROnPlateau'
+        if cfg['model_name'] in ['vqvae']:
+            cfg['data_shape'] = [3, 128, 128, 128]
+            cfg['batch_size'] = {'train': 1, 'test': 1}
+            cfg['num_epochs'] = 200
+            cfg['optimizer_name'] = 'Adam'
+            cfg['lr'] = 1e-3
+            cfg['weight_decay'] = 5e-4
+            cfg['scheduler_name'] = 'ReduceLROnPlateau'
+        elif cfg['model_name'] in ['transformer']:
+            cfg['batch_size'] = {'train': 1, 'test': 1}
+            cfg['num_epochs'] = 200
+            cfg['optimizer_name'] = 'SGD'
+            cfg['lr'] = 1e-1
+            cfg['weight_decay'] = 5e-4
+            cfg['scheduler_name'] = 'MultiStepLR'
+            cfg['factor'] = 0.1
+            cfg['milestones'] = [25, 50]
+            cfg['bptt'] = 8
+        else:
+            raise ValueError('Not valid model name')
     return
 
 
@@ -224,6 +244,13 @@ def collate(input):
     for k in input:
         input[k] = torch.stack(input[k], 0)
     return input
+
+
+def batchify(dataset, batch_size):
+    num_batch = len(dataset) // batch_size
+    dataset = dataset.narrow(0, 0, num_batch * batch_size)
+    dataset = dataset.reshape(batch_size, -1, *dataset.size()[1:])
+    return dataset
 
 
 def Compute_1D_PDF(Signal, num_bins=int(1500)):
