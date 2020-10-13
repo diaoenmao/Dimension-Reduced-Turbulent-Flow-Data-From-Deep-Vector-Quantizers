@@ -13,8 +13,8 @@ class PositionalEmbedding(nn.Module):
         self.positional_embedding = nn.Embedding(cfg['bptt'], embedding_size)
 
     def forward(self, x):
-        N, S = x.size()
-        position = torch.arange(S, dtype=torch.long, device=x.device).unsqueeze(0).expand((N, S))
+        N, S, H, W, D = x.size()
+        position = torch.arange(S, dtype=torch.long, device=x.device).view(1, -1, 1, 1, 1).expand((N, S, H, W, D))
         x = self.positional_embedding(position)
         return x
 
@@ -25,12 +25,12 @@ class TransformerEmbedding(nn.Module):
         self.num_tokens = num_tokens
         self.embedding_size = embedding_size
         self.positional_embedding = PositionalEmbedding(embedding_size)
-        self.embedding = nn.Embedding(num_tokens + 1, embedding_size)
+        self.embedding = nn.Embedding(num_tokens, embedding_size)
         self.norm = nn.LayerNorm(embedding_size)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, src):
-        src = self.scaler(self.embedding(src)) + self.scaler(self.positional_embedding(src))
+        src = self.embedding(src) + self.positional_embedding(src)
         src = self.dropout(self.norm(src))
         return src
 
@@ -54,33 +54,44 @@ class MultiheadAttention(nn.Module):
         super().__init__()
         self.embedding_size = embedding_size
         self.num_heads = num_heads
-        self.linear_q = nn.Linear(embedding_size, embedding_size)
-        self.linear_k = nn.Linear(embedding_size, embedding_size)
-        self.linear_v = nn.Linear(embedding_size, embedding_size)
-        self.linear_o = nn.Linear(embedding_size, embedding_size)
+        self.conv_q = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
+        self.conv_k = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
+        self.conv_v = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
+        self.conv_o = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
         self.attention = ScaledDotProduct(temperature=(embedding_size // num_heads) ** 0.5)
 
+    def _reshape_to_conv3d(self, x):
+        return x.view(-1, *x.size()[2:]).permute(0, 4, 1, 2, 3)
+
+    def _reshape_from_conv3d(self, x, N):
+        return x.permute(0, 2, 3, 4, 1).view(N, -1, *x.size()[2:], x.size(1))
+
     def _reshape_to_batches(self, x):
-        batch_size, seq_len, in_feature = x.size()
+        batch_size, seq_len, H, W, D, in_feature = x.size()
         sub_dim = in_feature // self.num_heads
-        return x.reshape(batch_size, seq_len, self.num_heads, sub_dim).permute(0, 2, 1, 3) \
-            .reshape(batch_size * self.num_heads, seq_len, sub_dim)
+        return x.reshape(batch_size, seq_len, H, W, D, self.num_heads, sub_dim).permute(0, 5, 2, 3, 4, 1, 6) \
+            .reshape(batch_size * self.num_heads, H, W, D, seq_len, sub_dim)
 
     def _reshape_from_batches(self, x):
-        batch_size, seq_len, in_feature = x.size()
+        batch_size, H, W, D, seq_len, in_feature = x.size()
         batch_size //= self.num_heads
         out_dim = in_feature * self.num_heads
-        return x.reshape(batch_size, self.num_heads, seq_len, in_feature).permute(0, 2, 1, 3) \
-            .reshape(batch_size, seq_len, out_dim)
+        return x.reshape(batch_size, self.num_heads, H, W, D, seq_len, in_feature).permute(0, 5, 2, 3, 4, 1, 6) \
+            .reshape(batch_size, seq_len, H, W, D, out_dim)
 
     def forward(self, q, k, v, mask=None):
-        q, k, v = self.scaler(self.linear_q(q)), self.scaler(self.linear_k(k)), self.scaler(self.linear_v(v))
+        N, _, H, W, D, _ = q.size()
+        q, k, v = self._reshape_to_conv3d(q), self._reshape_to_conv3d(k), self._reshape_to_conv3d(v)
+        q, k, v = self.conv_q(q), self.conv_k(k), self.conv_v(v)
+        q, k, v = self._reshape_from_conv3d(q, N), self._reshape_from_conv3d(k, N), self._reshape_from_conv3d(v, N)
         q, k, v = self._reshape_to_batches(q), self._reshape_to_batches(k), self._reshape_to_batches(v)
         if mask is not None:
-            mask = mask.repeat(self.num_heads, 1, 1)
+            mask = mask.repeat(self.num_heads, H, W, D, 1, 1)
         q, attn = self.attention(q, k, v, mask)
         q = self._reshape_from_batches(q)
-        q = self.scaler(self.linear_o(q))
+        q = self._reshape_to_conv3d(q)
+        q = self.conv_o(q)
+        q = self._reshape_from_conv3d(q, N)
         return q, attn
 
 
@@ -111,7 +122,7 @@ class TransformerEncoderLayer(nn.Module):
         attn_output, _ = self.mha(src, src, src, mask=src_mask)
         src = src + self.dropout(attn_output)
         src = self.norm1(src)
-        src2 = self.scaler(self.linear2(self.dropout1(self.activation(self.scaler(self.linear1(src))))))
+        src2 = self.linear2(self.dropout1(self.activation(self.linear1(src))))
         src = src + self.dropout2(src2)
         src = self.norm2(src)
         return src
@@ -126,7 +137,7 @@ class Decoder(nn.Module):
         self.linear2 = nn.Linear(embedding_size, num_tokens)
 
     def forward(self, src):
-        out = self.linear2(self.norm1(self.activation(self.scaler(self.linear1(src)))))
+        out = self.linear2(self.norm1(self.activation(self.linear1(src))))
         return out
 
 
@@ -138,22 +149,28 @@ class Transformer(nn.Module):
         encoder_layers = TransformerEncoderLayer(embedding_size, num_heads, hidden_size, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, num_layers)
         self.decoder = Decoder(num_embedding, embedding_size)
+        self.src_mask = None
 
-    def forward(self, input):
-        print('aa')
-        exit()
+    def _generate_square_subsequent_mask(self, sz):
+        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        return mask
+
+    def forward(self, input, has_mask=True):
         output = {}
-        src = input['label'].clone()
-        N, S = src.size()
-        d = torch.distributions.bernoulli.Bernoulli(probs=cfg['mask_rate'])
-        mask = d.sample((N, S)).to(src.device)
-        src = src.masked_fill(mask == 1, self.num_tokens).detach()
+        src = input['code']
+        if has_mask:
+            if self.src_mask is None or self.src_mask.size(0) != src.size(1):
+                mask = self._generate_square_subsequent_mask(src.size(1)).to(src.device)
+                self.src_mask = mask
+        else:
+            self.src_mask = None
         src = self.transformer_embedding(src)
-        src = self.transformer_encoder(src)
+        src = self.transformer_encoder(src, self.src_mask)
         out = self.decoder(src)
-        out = out.permute(0, 2, 1)
+        out = out.permute(0, 5, 1, 2, 3, 4)
         output['score'] = out
-        output['loss'] = F.cross_entropy(output['score'], input['label'])
+        output['loss'] = F.cross_entropy(output['score'], input['ncode'])
         return output
 
 

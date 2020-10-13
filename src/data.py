@@ -52,6 +52,7 @@ class BatchDataset(Dataset):
 
     def __getitem__(self, index):
         seq_length = min(self.seq_length, self.S - 1 - index)
-        input = [{'code': self.dataset[i][:, self.idx[index]:self.idx[index] + seq_length]} for i in
+        input = [{'code': self.dataset[i][:, self.idx[index]:self.idx[index] + seq_length],
+                  'ncode': self.dataset[i][:, self.idx[index + 1]:self.idx[index + 1] + seq_length]} for i in
                  range(len(self.dataset))]
         return input

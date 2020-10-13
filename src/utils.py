@@ -110,7 +110,7 @@ def process_control():
     cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
     cfg['vqvae'] = {'hidden_size': 128, 'depth': 3, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
                     'num_embedding': 512, 'vq_commit': 1}
-    cfg['transformer'] = {'embedding_size': 256, 'num_heads': 4, 'hidden_size': 512, 'num_layers': 4,
+    cfg['transformer'] = {'embedding_size': 16, 'num_heads': 4, 'hidden_size': 32, 'num_layers': 2,
                           'dropout': 0.2}
     if cfg['data_name'] in ['Turb']:
         if cfg['model_name'] in ['vqvae']:
@@ -130,7 +130,7 @@ def process_control():
             cfg['scheduler_name'] = 'MultiStepLR'
             cfg['factor'] = 0.1
             cfg['milestones'] = [25, 50]
-            cfg['bptt'] = 8
+            cfg['bptt'] = 4
         else:
             raise ValueError('Not valid model name')
     return
