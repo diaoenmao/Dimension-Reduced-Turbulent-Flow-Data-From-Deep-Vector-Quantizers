@@ -54,17 +54,11 @@ class MultiheadAttention(nn.Module):
         super().__init__()
         self.embedding_size = embedding_size
         self.num_heads = num_heads
-        self.conv_q = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
-        self.conv_k = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
-        self.conv_v = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
-        self.conv_o = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
+        self.linear_q = nn.Linear(embedding_size, embedding_size)
+        self.linear_k = nn.Linear(embedding_size, embedding_size)
+        self.linear_v = nn.Linear(embedding_size, embedding_size)
+        self.linear_o = nn.Linear(embedding_size, embedding_size)
         self.attention = ScaledDotProduct(temperature=(embedding_size // num_heads) ** 0.5)
-
-    def _reshape_to_conv3d(self, x):
-        return x.view(-1, *x.size()[2:]).permute(0, 4, 1, 2, 3)
-
-    def _reshape_from_conv3d(self, x, N):
-        return x.permute(0, 2, 3, 4, 1).view(N, -1, *x.size()[2:], x.size(1))
 
     def _reshape_to_batches(self, x):
         batch_size, seq_len, H, W, D, in_feature = x.size()
@@ -81,17 +75,13 @@ class MultiheadAttention(nn.Module):
 
     def forward(self, q, k, v, mask=None):
         N, _, H, W, D, _ = q.size()
-        q, k, v = self._reshape_to_conv3d(q), self._reshape_to_conv3d(k), self._reshape_to_conv3d(v)
-        q, k, v = self.conv_q(q), self.conv_k(k), self.conv_v(v)
-        q, k, v = self._reshape_from_conv3d(q, N), self._reshape_from_conv3d(k, N), self._reshape_from_conv3d(v, N)
+        q, k, v = self.linear_q(q), self.linear_k(k), self.linear_v(v)
         q, k, v = self._reshape_to_batches(q), self._reshape_to_batches(k), self._reshape_to_batches(v)
         if mask is not None:
             mask = mask.repeat(self.num_heads, H, W, D, 1, 1)
         q, attn = self.attention(q, k, v, mask)
         q = self._reshape_from_batches(q)
-        q = self._reshape_to_conv3d(q)
-        q = self.conv_o(q)
-        q = self._reshape_from_conv3d(q, N)
+        q = self.linear_o(q)
         return q, attn
 
 
@@ -153,7 +143,7 @@ class Transformer(nn.Module):
 
     def _generate_square_subsequent_mask(self, sz):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        mask = mask.float().masked_fill(mask == 0, float('-inf'))
         return mask
 
     def forward(self, input, has_mask=True):
