@@ -78,6 +78,7 @@ class ConvLSTMCell(nn.Module):
         self.cell_info = cell_info
         self.cell = self.make_cell()
         self.hidden = None
+        self.embedding = nn.Embedding(cell_info['num_embedding'], cell_info['embedding_size'])
         self.Conv3d_map = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], \
                                     kernel_size=3, stride=1, padding=1)
 
@@ -107,9 +108,11 @@ class ConvLSTMCell(nn.Module):
             self.hidden = hidden
         output = {}
         x = input['code']
-        ## change type
-        x = x.type(torch.float)
-        # print("Now x.type() = ",x.type())
+        # apply embedding
+        y = [None for _ in range(x.size(1))]
+        for j in range(x.size(1)):
+            y[j] = self.embedding(x[:, j]).permute(0,4,1,2,3)
+        x = torch.stack(y, dim=1)
         # I expect input with shape (B,S,C,H,W,D) , if not, we manually add the dimension for channel
         x = x.unsqueeze(2) if (x.dim() == 5) else x
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
@@ -183,9 +186,10 @@ def conv_lstm():
     conv_lstm_info = {}
     conv_lstm_info['num_layers'] = cfg['conv_lstm']['num_layers']
     conv_lstm_info['activation'] = 'tanh'
-    conv_lstm_info['input_size'] = cfg['conv_lstm']['input_size']
+    conv_lstm_info['input_size'] = cfg['conv_lstm']['input_size']#cfg['conv_lstm']['input_size']
     conv_lstm_info['output_size'] = cfg['conv_lstm']['output_size']
     conv_lstm_info['num_embedding'] = cfg[cfg['ae_name']]['num_embedding']
+    conv_lstm_info['embedding_size']= cfg['conv_lstm']['embedding_size']
 
     model = nn.ModuleList([ConvLSTMCell(conv_lstm_info) for _ in range(depth)])
     model.apply(init_param)
