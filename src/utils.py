@@ -98,7 +98,7 @@ def recur(fn, input, *args):
 
 
 def process_dataset(dataset):
-    if cfg['model_name'] in ['transformer','conv_lstm']:
+    if cfg['model_name'] in ['transformer', 'conv_lstm']:
         for split in dataset:
             for i in range(len(dataset[split])):
                 dataset[split][i] = batchify(dataset[split][i], cfg['batch_size'][split])
@@ -112,6 +112,7 @@ def process_control():
                     'num_embedding': 512, 'vq_commit': 1}
     cfg['transformer'] = {'embedding_size': 16, 'num_heads': 4, 'hidden_size': 32, 'num_layers': 2,
                           'dropout': 0.2}
+    cfg['conv_lstm'] = {'input_size': 1, 'output_size': 1, 'num_layers': 4}
     if cfg['data_name'] in ['Turb']:
         if cfg['model_name'] in ['vqvae']:
             cfg['data_shape'] = [3, 128, 128, 128]
@@ -122,11 +123,7 @@ def process_control():
             cfg['weight_decay'] = 5e-4
             cfg['scheduler_name'] = 'ReduceLROnPlateau'
         elif cfg['model_name'] in ['conv_lstm']:
-            cfg['conv_lstm']={}
             cfg['batch_size'] = {'train': 1, 'test': 1}
-            cfg['conv_lstm']['input_size']=1
-            cfg['conv_lstm']['output_size']=1
-            cfg['conv_lstm']['num_layers']=4
             cfg['num_epochs'] = 200
             cfg['optimizer_name'] = 'Adam'
             cfg['lr'] = 1e-3

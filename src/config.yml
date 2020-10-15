@@ -41,7 +41,7 @@ init_seed: 0
 num_experiments: 1
 num_epochs: 200
 log_interval: 0.25
-device: cpu
+device: cuda
 world_size: 1
 resume_mode: 0
 # other

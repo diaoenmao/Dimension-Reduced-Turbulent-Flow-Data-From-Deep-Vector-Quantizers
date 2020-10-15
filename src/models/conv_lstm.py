@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -72,14 +71,15 @@ class ConvCell(nn.Module):
         x = self.cell['activation'](self.cell['normalization'](self.cell['main'](x)))
         return x
 
+
 class ConvLSTMCell(nn.Module):
     def __init__(self, cell_info):
         super(ConvLSTMCell, self).__init__()
         self.cell_info = cell_info
         self.cell = self.make_cell()
         self.hidden = None
-        self.Conv3d_map=nn.Conv3d(cell_info['output_size'],cell_info['num_embedding'], \
-                         kernel_size=3, stride=1,padding=1)
+        self.Conv3d_map = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], \
+                                    kernel_size=3, stride=1, padding=1)
 
     def make_cell(self):
         cell_info = copy.deepcopy(self.cell_info)
@@ -87,42 +87,37 @@ class ConvLSTMCell(nn.Module):
         for i in range(cell_info['num_layers']):
             cell_in_info = {'cell': 'ConvCell', 'input_size': cell_info['input_size'],
                             'output_size': 4 * cell_info['output_size'],
-                            'normalization': 'none','activation': 'none'}
+                            'normalization': 'none', 'activation': 'none'}
             cell_hidden_info = {'cell': 'ConvCell', 'input_size': cell_info['output_size'],
                                 'output_size': 4 * cell_info['output_size'],
-                                'normalization': 'none','activation': 'none'}
+                                'normalization': 'none', 'activation': 'none'}
             cell_activation_info = {'cell': 'Activation', 'mode': cell_info['activation']}
             cell[i]['in'] = Cell(cell_in_info)
             cell[i]['hidden'] = Cell(cell_hidden_info)
             cell[i]['activation'] = nn.ModuleList([Cell(cell_activation_info), Cell(cell_activation_info)])
         return cell
 
-    def init_hidden(self, hidden_size,dtype=torch.float):
-        hidden = [[torch.zeros(hidden_size, device=cfg['device'],dtype=dtype)], [torch.zeros(hidden_size, device=cfg['device'],dtype=dtype)]]
+    def init_hidden(self, hidden_size, dtype=torch.float):
+        hidden = [[torch.zeros(hidden_size, device=cfg['device'], dtype=dtype)],
+                  [torch.zeros(hidden_size, device=cfg['device'], dtype=dtype)]]
         return hidden
 
-    """def free_hidden(self):
-        self.hidden = None
-        return"""
-
     def forward(self, input, hidden=None):
-        if self.hidden==None:
-            self.hidden=hidden
+        if self.hidden == None:
+            self.hidden = hidden
         output = {}
-        x = input['code']        
+        x = input['code']
         ## change type
-        x=x.type(torch.float)
-        #print("Now x.type() = ",x.type())
+        x = x.type(torch.float)
+        # print("Now x.type() = ",x.type())
         # I expect input with shape (B,S,C,H,W,D) , if not, we manually add the dimension for channel
-        x = x.unsqueeze(2) if (x.dim() == 5) else x       
+        x = x.unsqueeze(2) if (x.dim() == 5) else x
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
             y = [None for _ in range(x.size(1))]
             for j in range(x.size(1)):
-                #print("x[:, j].size()=",x[:, j].size())
                 gates = self.cell[i]['in'](x[:, j])
                 if hidden is None:
-                    
                     if self.hidden is None:
                         self.hidden = self.init_hidden(
                             (gates.size(0), self.cell_info['output_size'], *gates.size()[2:]))
@@ -140,25 +135,21 @@ class ConvLSTMCell(nn.Module):
                 ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
                 ingate = torch.sigmoid(ingate)
                 forgetgate = torch.sigmoid(forgetgate)
-                cellgate = self.cell[i]['activation'][0](cellgate) # tanh
+                cellgate = self.cell[i]['activation'][0](cellgate)  # tanh
                 outgate = torch.sigmoid(outgate)
                 cx[i] = (forgetgate * cx[i]) + (ingate * cellgate)
-                hx[i] = outgate * self.cell[i]['activation'][1](cx[i]) # tanh
+                hx[i] = outgate * self.cell[i]['activation'][1](cx[i])  # tanh
                 y[j] = hx[i]
             x = torch.stack(y, dim=1)
         self.hidden = [hx, cx]
-        
         # mapping from out_size channel to number of embeddings
         y = [None for _ in range(x.size(1))]
         for j in range(x.size(1)):
-            y[j]=self.Conv3d_map(x[:,j])
+            y[j] = self.Conv3d_map(x[:, j])
         x = torch.stack(y, dim=1)
-        output['score'] = x#.argmax(dim=2 ,keepdim=False)
-        output['loss'] = F.cross_entropy(output['score'].permute(0,2,1,3,4,5), input['ncode'])
-        
-        return (output,self.hidden) if self.training else output
-
-
+        output['score'] = x  # .argmax(dim=2 ,keepdim=False)
+        output['loss'] = F.cross_entropy(output['score'].permute(0, 2, 1, 3, 4, 5), input['ncode'])
+        return (output, self.hidden) if self.training else output
 
 
 class Cell(nn.Module):
@@ -185,18 +176,17 @@ class Cell(nn.Module):
     def forward(self, *input):
         x = self.cell(*input)
         return x
-    
+
 
 def conv_lstm():
     depth = cfg[cfg['ae_name']]['depth']
-    conv_lstm_info={}
-    conv_lstm_info['num_layers']=cfg['conv_lstm']['num_layers']
-    conv_lstm_info['activation']='tanh'
-    conv_lstm_info['input_size']=cfg['conv_lstm']['input_size']
-    conv_lstm_info['output_size']=cfg['conv_lstm']['output_size']
-    conv_lstm_info['num_embedding']=cfg[cfg['ae_name']]['num_embedding']
-    
-    
+    conv_lstm_info = {}
+    conv_lstm_info['num_layers'] = cfg['conv_lstm']['num_layers']
+    conv_lstm_info['activation'] = 'tanh'
+    conv_lstm_info['input_size'] = cfg['conv_lstm']['input_size']
+    conv_lstm_info['output_size'] = cfg['conv_lstm']['output_size']
+    conv_lstm_info['num_embedding'] = cfg[cfg['ae_name']]['num_embedding']
+
     model = nn.ModuleList([ConvLSTMCell(conv_lstm_info) for _ in range(depth)])
     model.apply(init_param)
     return model

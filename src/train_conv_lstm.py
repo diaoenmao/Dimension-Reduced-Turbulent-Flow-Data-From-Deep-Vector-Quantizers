@@ -100,26 +100,26 @@ def train(dataset, model, optimizer, logger, epoch):
     model.train(True)
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
-    hidden=[[ [None for _ in range(cfg['conv_lstm']['num_layers'])],[None for _ in range(cfg['conv_lstm']['num_layers'])] ] for _ in range(len(dataset[0]))] # two hidden
-    #print("len(dataset[0]) =", len(dataset[0]),len(dataset))
+    hidden = [
+        [[None for _ in range(cfg['conv_lstm']['num_layers'])], [None for _ in range(cfg['conv_lstm']['num_layers'])]]
+        for _ in range(len(dataset[0]))]  # two hidden
     for i, input in enumerate(dataset):
         loss = []
         input_size = input[0]['code'].size(0)
         optimizer.zero_grad()
-        
         for j in range(len(input)):
             input[j] = to_device(input[j], cfg['device'])
-            if i==0:
-                for k in range(cfg['conv_lstm']['num_layers']):                    
-                    new_hidden=init_hidden((input[j]['code'].size()[0] ,cfg['conv_lstm']['output_size'],*input[j]['code'].size()[2:]))
-                    hidden[j][0][k],hidden[j][1][k]=new_hidden[0][0],new_hidden[1][0]
+            if i == 0:
+                for k in range(cfg['conv_lstm']['num_layers']):
+                    new_hidden = init_hidden(
+                        (input[j]['code'].size()[0], cfg['conv_lstm']['output_size'], *input[j]['code'].size()[2:]))
+                    hidden[j][0][k], hidden[j][1][k] = new_hidden[0][0], new_hidden[1][0]
             for k in range(cfg['conv_lstm']['num_layers']):
-                hidden[j][0][k],hidden[j][1][k] = repackage_hidden(hidden[j][0][k]),repackage_hidden(hidden[j][1][k])
-            output,hidden[j] = model[j](input[j],hidden[j])
-            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']            
+                hidden[j][0][k], hidden[j][1][k] = repackage_hidden(hidden[j][0][k]), repackage_hidden(hidden[j][1][k])
+            output, hidden[j] = model[j](input[j], hidden[j])
+            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
             output['loss'].backward()
             loss.append(output['loss'])
-            print("j = ", j, "output['loss'] = ",output['loss'], " i = ", i , " loss = ", loss)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         output = {'loss': sum(loss) / len(input)}
@@ -138,46 +138,8 @@ def train(dataset, model, optimizer, logger, epoch):
             logger.append(info, 'train', mean=False)
             logger.write('train', cfg['metric_name']['train'])
     return
-""" 
-This also works with output['loss'].backward(retain_graph=True) but it's not efficinet
-def trainN(dataset, model, optimizer, logger, epoch):
-    metric = Metric()
-    model.train(True)
-    start_time = time.time()
-    dataset = BatchDataset(dataset, cfg['bptt'])
-    for i, input in enumerate(dataset):
-        loss = []
-        input_size = input[0]['code'].size(0)
-        optimizer.zero_grad()
-        
-        for j in range(len(input)):
-            input[j] = to_device(input[j], cfg['device'])            
-            output,_ = model[j](input[j])
-            #print("j  ,  output['loss'] = ",j, output['loss'], " cfg['world_size'] =" ,cfg['world_size'] ," i = ", i , " loss = ", loss)
-            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-            
-            output['loss'].backward(retain_graph=True)
-            loss.append(output['loss'])
-            
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
-        optimizer.step()
-        output = {'loss': sum(loss) / len(input)}
-        evaluation = metric.evaluate(cfg['metric_name']['train'], input, output)
-        logger.append(evaluation, 'train', n=input_size)
-        if i % int((len(dataset) * cfg['log_interval']) + 1) == 0:
-            batch_time = (time.time() - start_time) / (i + 1)
-            lr = optimizer.param_groups[0]['lr']
-            epoch_finished_time = datetime.timedelta(seconds=round(batch_time * (len(dataset) - i - 1)))
-            exp_finished_time = epoch_finished_time + datetime.timedelta(
-                seconds=round((cfg['num_epochs'] - epoch) * batch_time * len(dataset)))
-            info = {'info': ['Model: {}'.format(cfg['model_tag']),
-                             'Train Epoch: {}({:.0f}%)'.format(epoch, 100. * i / len(dataset)),
-                             'Learning rate: {}'.format(lr), 'Epoch Finished Time: {}'.format(epoch_finished_time),
-                             'Experiment Finished Time: {}'.format(exp_finished_time)]}
-            logger.append(info, 'train', mean=False)
-            logger.write('train', cfg['metric_name']['train'])
-    return
-"""
+
+
 def test(dataset, model, logger, epoch):
     with torch.no_grad():
         metric = Metric()
@@ -199,15 +161,17 @@ def test(dataset, model, logger, epoch):
         logger.write('test', cfg['metric_name']['test'])
     return
 
-def init_hidden(hidden_size,dtype=torch.float):
-        hidden = [[torch.zeros(hidden_size, device=cfg['device'],dtype=dtype)], [torch.zeros(hidden_size, device=cfg['device'],dtype=dtype)]]
-        return hidden
+
+def init_hidden(hidden_size, dtype=torch.float):
+    hidden = [[torch.zeros(hidden_size, device=cfg['device'], dtype=dtype)],
+              [torch.zeros(hidden_size, device=cfg['device'], dtype=dtype)]]
+    return hidden
+
 
 def repackage_hidden(h):
     """Wraps hidden states in new Tensors, to detach them from their history."""
-    
     return h.detach()
-    
+
 
 if __name__ == "__main__":
     main()
