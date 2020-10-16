@@ -81,11 +81,15 @@ class ConvLSTMCell(nn.Module):
         self.embedding = nn.Embedding(cell_info['num_embedding'], cell_info['embedding_size'])
         self.Conv3d_map = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], \
                                     kernel_size=3, stride=1, padding=1)
+        self.U_sample=nn.ConvTranspose3d(cell_info['embedding_size'], cell_info['embedding_size'], kernel_size=4, stride=2, padding=1)
+        self.D_sample=nn.Conv3d(cell_info['embedding_size'], cell_info['embedding_size'], kernel_size=4, stride=2, padding=1)
 
     def make_cell(self):
         cell_info = copy.deepcopy(self.cell_info)
         cell = nn.ModuleList([nn.ModuleDict({}) for _ in range(cell_info['num_layers'])])
         for i in range(cell_info['num_layers']):
+            if i>0:
+                cell_info['input_size']=cell_info['output_size']
             cell_in_info = {'cell': 'ConvCell', 'input_size': cell_info['input_size'],
                             'output_size': 4 * cell_info['output_size'],
                             'normalization': 'none', 'activation': 'none'}
@@ -103,18 +107,80 @@ class ConvLSTMCell(nn.Module):
                   [torch.zeros(hidden_size, device=cfg['device'], dtype=dtype)]]
         return hidden
 
-    def forward(self, input, hidden=None):
+    def forward(self, input, hidden=None, model_id=0):
         if self.hidden == None:
             self.hidden = hidden
         output = {}
-        x = input['code']
+        x=[]
+        for i in range (len(input)):
+            x.append(input[i]['code'])
+        #print(" before embedding " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code size=(B,S,D,H,W)
         # apply embedding
-        y = [None for _ in range(x.size(1))]
-        for j in range(x.size(1)):
-            y[j] = self.embedding(x[:, j]).permute(0,4,1,2,3)
-        x = torch.stack(y, dim=1)
-        # I expect input with shape (B,S,C,H,W,D) , if not, we manually add the dimension for channel
-        x = x.unsqueeze(2) if (x.dim() == 5) else x
+        for i, code in enumerate(x):            
+            y = [None for _ in range(x[0].size(1))]
+            for j in range(x[0].size(1)):
+                y[j] = self.embedding(code[:, j]).permute(0,4,1,2,3)
+            x[i] = torch.stack(y, dim=1)    
+        #print( "after embedding = " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code size=(B,S,C,D,H,W)
+        
+        # depending on the model id, the path would be different        
+        if model_id==0:
+            # code 1 > no change
+            # code 2 > one upsample
+            code2=x[1]
+            y = [None for _ in range(x[0].size(1))]
+            for i in range(x[0].size(1)):
+                y[i]=self.U_sample(code2[:,i])
+            code2=torch.stack(y, dim=1)
+            x[1]=code2
+            # code 3 > two upsample
+            code3=x[2]
+            y = [None for _ in range(x[0].size(1))]
+            for i in range(x[0].size(1)):
+                y[i]=self.U_sample(self.U_sample(code3[:,i]))
+            code3=torch.stack(y, dim=1)
+            x[2]=code3
+                            
+        if model_id==1:
+            # code 1 > one downsample
+            code1=x[0]
+            y = [None for _ in range(x[0].size(1))]
+            for i in range(x[0].size(1)):
+                y[i]=self.D_sample(code1[:,i])
+            code1=torch.stack(y, dim=1)
+            x[0]=code1
+            # code 2 > no change
+            # code 3 > one upsample
+            code3=x[2]
+            y = [None for _ in range(x[0].size(1))]
+            for i in range(x[0].size(1)):
+                y[i]=self.U_sample(code3[:,i])
+            code3=torch.stack(y, dim=1)
+            x[2]=code3
+            
+        if model_id==2:
+            # code 1 > two downsample
+            code1=x[0]
+            y = [None for _ in range(x[0].size(1))]
+            for i in range(x[0].size(1)):
+                y[i]=self.D_sample(self.D_sample(code1[:,i]))
+            code1=torch.stack(y, dim=1)
+            x[0]=code1
+            # code 2 > one downsample
+            code2=x[1]
+            y = [None for _ in range(x[0].size(1))]
+            for i in range(x[0].size(1)):
+                y[i]=self.D_sample(code2[:,i])
+            code2=torch.stack(y, dim=1)
+            x[1]=code2
+            # code 3 > no change        
+        
+        #print( "after U/D sampling = " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code size=(B,S,C,D,H,W)
+        
+        # concat
+        x=torch.cat(x,dim=2)
+        print("after concat x.size() = ", x.size(), "model_id = ", model_id)
+
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
             y = [None for _ in range(x.size(1))]
@@ -134,6 +200,7 @@ class ConvLSTMCell(nn.Module):
                             pass
                 if j == 0:
                     hx[i], cx[i] = self.hidden[0][i], self.hidden[1][i]
+                
                 gates += self.cell[i]['hidden'](hx[i])
                 ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
                 ingate = torch.sigmoid(ingate)
@@ -151,7 +218,7 @@ class ConvLSTMCell(nn.Module):
             y[j] = self.Conv3d_map(x[:, j])
         x = torch.stack(y, dim=1)
         output['score'] = x  # .argmax(dim=2 ,keepdim=False)
-        output['loss'] = F.cross_entropy(output['score'].permute(0, 2, 1, 3, 4, 5), input['ncode'])
+        output['loss'] = F.cross_entropy(output['score'].permute(0, 2, 1, 3, 4, 5), input[model_id]['ncode'])
         return (output, self.hidden) if self.training else output
 
 
