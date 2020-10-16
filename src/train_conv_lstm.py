@@ -73,12 +73,12 @@ def runExperiment():
         model = torch.nn.DataParallel(model, device_ids=list(range(cfg['world_size'])))
     for epoch in range(last_epoch, cfg['num_epochs'] + 1):
         logger.safe(True)
-        
+
         for model_id in range(cfg[cfg['ae_name']]['depth']):
             # model_id: 1,2,3 > predict code 1,2,3
             train(dataset['train'], model[model_id], optimizer, logger, epoch, model_id)
             test(dataset['test'], model[model_id], logger, epoch, model_id)
-            
+
         if cfg['scheduler_name'] == 'ReduceLROnPlateau':
             scheduler.step(metrics=logger.mean['train/{}'.format(cfg['pivot_metric'])])
         else:
@@ -104,20 +104,22 @@ def train(dataset, model, optimizer, logger, epoch, model_id):
     model.train(True)
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
-    #print("len(dataset[0]) = ",len(dataset[0])," dataset[0][model_id]['code'].size() = ", dataset[0][model_id]['code'].size()) # gives you the target spatial dimension
-    hidden = [[None for _ in range(cfg['conv_lstm']['num_layers'])], [None for _ in range(cfg['conv_lstm']['num_layers'])]] # two hidden
-    for k in range(cfg['conv_lstm']['num_layers']):
-        new_hidden = init_hidden(
-            (dataset[0][0]['code'].size(0), cfg['conv_lstm']['output_size'], *dataset[0][model_id]['code'].size()[2:]))
-        hidden[0][k], hidden[1][k] = new_hidden[0][0], new_hidden[1][0]
+    # print("len(dataset[0]) = ",len(dataset[0])," dataset[0][model_id]['code'].size() = ", dataset[0][model_id][
+    # 'code'].size()) # gives you the target spatial dimension
+    # hidden = [[None for _ in range(cfg['conv_lstm']['num_layers'])], [None for _ in range(cfg['conv_lstm'][
+    # 'num_layers'])]] # two hidden
+    # for k in range(cfg['conv_lstm']['num_layers']):
+    # new_hidden = init_hidden(
+    #     (dataset[0][0]['code'].size(0), cfg['conv_lstm']['output_size'], *dataset[0][model_id]['code'].size()[2:]))
+    # hidden[0][k], hidden[1][k] = new_hidden[0][0], new_hidden[1][0]
     for i, input in enumerate(dataset):
         loss = []
         input_size = input[0]['code'].size(0)
         optimizer.zero_grad()
-        input = to_device(input, cfg['device'])            
-        for k in range(cfg['conv_lstm']['num_layers']):
-            hidden[0][k], hidden[1][k] = repackage_hidden(hidden[0][k]), repackage_hidden(hidden[1][k])
-        output, hidden = model(input, hidden, model_id)
+        input = to_device(input, cfg['device'])
+        # for k in range(cfg['conv_lstm']['num_layers']):
+        #     hidden[0][k], hidden[1][k] = repackage_hidden(hidden[0][k]), repackage_hidden(hidden[1][k])
+        output = model(input, model_id=model_id)
         output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
         output['loss'].backward()
         loss.append(output['loss'])
@@ -148,7 +150,7 @@ def test(dataset, model, logger, epoch, model_id):
         dataset = BatchDataset(dataset, cfg['bptt'])
         for i, input in enumerate(dataset):
             loss = []
-            input_size = input[0]['code'].size(0)            
+            input_size = input[0]['code'].size(0)
             input = to_device(input, cfg['device'])
             output = model(input, model_id=model_id)
             output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']

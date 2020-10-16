@@ -79,17 +79,15 @@ class ConvLSTMCell(nn.Module):
         self.cell = self.make_cell()
         self.hidden = None
         self.embedding = nn.Embedding(cell_info['num_embedding'], cell_info['embedding_size'])
-        self.Conv3d_map = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], \
-                                    kernel_size=3, stride=1, padding=1)
-        self.U_sample=nn.ConvTranspose3d(cell_info['embedding_size'], cell_info['embedding_size'], kernel_size=4, stride=2, padding=1)
-        self.D_sample=nn.Conv3d(cell_info['embedding_size'], cell_info['embedding_size'], kernel_size=4, stride=2, padding=1)
+        self.Conv3d_map = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], kernel_size=3, stride=1,
+                                    padding=1)
 
     def make_cell(self):
         cell_info = copy.deepcopy(self.cell_info)
         cell = nn.ModuleList([nn.ModuleDict({}) for _ in range(cell_info['num_layers'])])
         for i in range(cell_info['num_layers']):
-            if i>0:
-                cell_info['input_size']=cell_info['output_size']
+            if i > 0:
+                cell_info['input_size'] = cell_info['output_size']
             cell_in_info = {'cell': 'ConvCell', 'input_size': cell_info['input_size'],
                             'output_size': 4 * cell_info['output_size'],
                             'normalization': 'none', 'activation': 'none'}
@@ -107,79 +105,62 @@ class ConvLSTMCell(nn.Module):
                   [torch.zeros(hidden_size, device=cfg['device'], dtype=dtype)]]
         return hidden
 
+    def repackage_hidden(self):
+        for i in range(len(self.hidden)):
+            self.hidden[0][i], self.hidden[1][i] = self.hidden[0][i].detach(), self.hidden[1][i].detach()
+        return
+
+    def free_hidden(self):
+        self.hidden = None
+        return
+
     def forward(self, input, hidden=None, model_id=0):
-        if self.hidden == None:
+        if self.hidden is None:
             self.hidden = hidden
         output = {}
-        x=[]
-        for i in range (len(input)):
+        x = []
+        for i in range(len(input)):
             x.append(input[i]['code'])
-        #print(" before embedding " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code size=(B,S,D,H,W)
+        # print(" before embedding " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code
+        # size=(B,S,D,H,W)
         # apply embedding
-        for i, code in enumerate(x):            
-            y = [None for _ in range(x[0].size(1))]
-            for j in range(x[0].size(1)):
-                y[j] = self.embedding(code[:, j]).permute(0,4,1,2,3)
-            x[i] = torch.stack(y, dim=1)    
-        #print( "after embedding = " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code size=(B,S,C,D,H,W)
-        
+        # for i, code in enumerate(x):
+        #     y = [None for _ in range(x[0].size(1))]
+        #     for j in range(x[0].size(1)):
+        #         y[j] = self.embedding(code[:, j]).permute(0, 4, 1, 2, 3)
+        #     x[i] = torch.stack(y, dim=1)
+
+        # print( "after embedding = " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each
+        # code size=(B,S,C,D,H,W)
+
         # depending on the model id, the path would be different        
-        if model_id==0:
+        if model_id == 0:
+            # code 0 > no change
+            # code 1 > scale 2
+            # code 2 > scale 4
+            x[1] = F.interpolate(x[1].float(), scale_factor=2, mode='nearest').long()
+            x[2] = F.interpolate(x[2].float(), scale_factor=4, mode='nearest').long()
+        elif model_id == 1:
+            # code 0 > scale 0.5
             # code 1 > no change
-            # code 2 > one upsample
-            code2=x[1]
-            y = [None for _ in range(x[0].size(1))]
-            for i in range(x[0].size(1)):
-                y[i]=self.U_sample(code2[:,i])
-            code2=torch.stack(y, dim=1)
-            x[1]=code2
-            # code 3 > two upsample
-            code3=x[2]
-            y = [None for _ in range(x[0].size(1))]
-            for i in range(x[0].size(1)):
-                y[i]=self.U_sample(self.U_sample(code3[:,i]))
-            code3=torch.stack(y, dim=1)
-            x[2]=code3
-                            
-        if model_id==1:
-            # code 1 > one downsample
-            code1=x[0]
-            y = [None for _ in range(x[0].size(1))]
-            for i in range(x[0].size(1)):
-                y[i]=self.D_sample(code1[:,i])
-            code1=torch.stack(y, dim=1)
-            x[0]=code1
+            # code 2 > scale 2
+            x[0] = F.interpolate(x[0].float(), scale_factor=0.5, mode='nearest').long()
+            x[2] = F.interpolate(x[2].float(), scale_factor=2, mode='nearest').long()
+        elif model_id == 2:
+            # code 0 > scale 0.25
+            # code 1 > scale 0.5
             # code 2 > no change
-            # code 3 > one upsample
-            code3=x[2]
-            y = [None for _ in range(x[0].size(1))]
-            for i in range(x[0].size(1)):
-                y[i]=self.U_sample(code3[:,i])
-            code3=torch.stack(y, dim=1)
-            x[2]=code3
-            
-        if model_id==2:
-            # code 1 > two downsample
-            code1=x[0]
-            y = [None for _ in range(x[0].size(1))]
-            for i in range(x[0].size(1)):
-                y[i]=self.D_sample(self.D_sample(code1[:,i]))
-            code1=torch.stack(y, dim=1)
-            x[0]=code1
-            # code 2 > one downsample
-            code2=x[1]
-            y = [None for _ in range(x[0].size(1))]
-            for i in range(x[0].size(1)):
-                y[i]=self.D_sample(code2[:,i])
-            code2=torch.stack(y, dim=1)
-            x[1]=code2
-            # code 3 > no change        
-        
-        #print( "after U/D sampling = " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code size=(B,S,C,D,H,W)
-        
+            x[0] = F.interpolate(x[0].float(), scale_factor=0.25, mode='nearest').long()
+            x[1] = F.interpolate(x[1].float(), scale_factor=0.5, mode='nearest').long()
+
+        # apply embedding
+        y = [None for _ in range(len(x))]
+        for i in range(len(x)):
+            y[i] = self.embedding(x[i]).permute(0, 1, 5, 2, 3, 4)
+
         # concat
-        x=torch.cat(x,dim=2)
-        print("after concat x.size() = ", x.size(), "model_id = ", model_id)
+        x = torch.cat(y, dim=2)
+        # print("after concat x.size() = ", x.size(), "model_id = ", model_id)
 
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
@@ -200,7 +181,7 @@ class ConvLSTMCell(nn.Module):
                             pass
                 if j == 0:
                     hx[i], cx[i] = self.hidden[0][i], self.hidden[1][i]
-                
+
                 gates += self.cell[i]['hidden'](hx[i])
                 ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
                 ingate = torch.sigmoid(ingate)
@@ -219,7 +200,8 @@ class ConvLSTMCell(nn.Module):
         x = torch.stack(y, dim=1)
         output['score'] = x  # .argmax(dim=2 ,keepdim=False)
         output['loss'] = F.cross_entropy(output['score'].permute(0, 2, 1, 3, 4, 5), input[model_id]['ncode'])
-        return (output, self.hidden) if self.training else output
+        self.free_hidden()
+        return output
 
 
 class Cell(nn.Module):
@@ -253,10 +235,10 @@ def conv_lstm():
     conv_lstm_info = {}
     conv_lstm_info['num_layers'] = cfg['conv_lstm']['num_layers']
     conv_lstm_info['activation'] = 'tanh'
-    conv_lstm_info['input_size'] = cfg['conv_lstm']['input_size']#cfg['conv_lstm']['input_size']
+    conv_lstm_info['input_size'] = cfg['conv_lstm']['input_size']  # cfg['conv_lstm']['input_size']
     conv_lstm_info['output_size'] = cfg['conv_lstm']['output_size']
     conv_lstm_info['num_embedding'] = cfg[cfg['ae_name']]['num_embedding']
-    conv_lstm_info['embedding_size']= cfg['conv_lstm']['embedding_size']
+    conv_lstm_info['embedding_size'] = cfg['conv_lstm']['embedding_size']
 
     model = nn.ModuleList([ConvLSTMCell(conv_lstm_info) for _ in range(depth)])
     model.apply(init_param)
