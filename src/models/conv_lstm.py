@@ -121,7 +121,7 @@ class ConvLSTMCell(nn.Module):
         x = []
         for i in range(len(input)):
             x.append(input[i]['code'])
-        # print(" before embedding " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code
+        #print(" before embedding " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code
         # size=(B,S,D,H,W)
         # apply embedding
         # for i, code in enumerate(x):
@@ -139,25 +139,26 @@ class ConvLSTMCell(nn.Module):
             # code 1 > scale 2
             # code 2 > scale 4
             x[1] = F.interpolate(x[1].float(), scale_factor=2, mode='nearest').long()
-            x[2] = F.interpolate(x[2].float(), scale_factor=4, mode='nearest').long()
+            #x[2] = F.interpolate(x[2].float(), scale_factor=4, mode='nearest').long()
         elif model_id == 1:
             # code 0 > scale 0.5
             # code 1 > no change
             # code 2 > scale 2
             x[0] = F.interpolate(x[0].float(), scale_factor=0.5, mode='nearest').long()
-            x[2] = F.interpolate(x[2].float(), scale_factor=2, mode='nearest').long()
+            #x[2] = F.interpolate(x[2].float(), scale_factor=2, mode='nearest').long()
+        """
         elif model_id == 2:
             # code 0 > scale 0.25
             # code 1 > scale 0.5
             # code 2 > no change
             x[0] = F.interpolate(x[0].float(), scale_factor=0.25, mode='nearest').long()
             x[1] = F.interpolate(x[1].float(), scale_factor=0.5, mode='nearest').long()
-
+        """
         # apply embedding
         y = [None for _ in range(len(x))]
         for i in range(len(x)):
             y[i] = self.embedding(x[i]).permute(0, 1, 5, 2, 3, 4)
-
+        #print(" after embedding " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code
         # concat
         x = torch.cat(y, dim=2)
         # print("after concat x.size() = ", x.size(), "model_id = ", model_id)
