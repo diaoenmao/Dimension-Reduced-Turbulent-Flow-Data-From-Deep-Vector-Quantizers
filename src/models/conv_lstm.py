@@ -79,8 +79,7 @@ class ConvLSTMCell(nn.Module):
         self.cell = self.make_cell()
         self.hidden = None
         self.embedding = nn.Embedding(cell_info['num_embedding'], cell_info['embedding_size'])
-        self.Conv3d_map = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], kernel_size=3, stride=1,
-                                    padding=1)
+        self.classifier = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], 1, 1, 0)
 
     def make_cell(self):
         cell_info = copy.deepcopy(self.cell_info)
@@ -118,51 +117,29 @@ class ConvLSTMCell(nn.Module):
         if self.hidden is None:
             self.hidden = hidden
         output = {}
-        x = []
-        for i in range(len(input)):
-            x.append(input[i]['code'])
-        #print(" before embedding " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code
-        # size=(B,S,D,H,W)
-        # apply embedding
-        # for i, code in enumerate(x):
-        #     y = [None for _ in range(x[0].size(1))]
-        #     for j in range(x[0].size(1)):
-        #         y[j] = self.embedding(code[:, j]).permute(0, 4, 1, 2, 3)
-        #     x[i] = torch.stack(y, dim=1)
-
-        # print( "after embedding = " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each
-        # code size=(B,S,C,D,H,W)
-
-        # depending on the model id, the path would be different        
+        # x = []
+        # for i in range(len(input)):
+        #     x.append(input[i]['code'])
+        # if model_id == 0:
+        #     # code 0 > no change
+        #     # code 1 > scale 2
+        #     x[1] = F.interpolate(x[1].float(), scale_factor=2, mode='nearest').long()
+        # elif model_id == 1:
+        #     # code 0 > scale 0.5
+        #     # code 1 > no change
+        #     x[0] = F.interpolate(x[0].float(), scale_factor=0.5, mode='nearest').long()
+        # # apply embedding
+        # y = [None for _ in range(len(x))]
+        # for i in range(len(x)):
+        #     y[i] = self.embedding(x[i]).permute(0, 1, 5, 2, 3, 4)
+        # # concat
+        # x = torch.cat(y, dim=2)
         if model_id == 0:
-            # code 0 > no change
-            # code 1 > scale 2
-            # code 2 > scale 4
-            x[1] = F.interpolate(x[1].float(), scale_factor=2, mode='nearest').long()
-            #x[2] = F.interpolate(x[2].float(), scale_factor=4, mode='nearest').long()
+            x = input[0]['code']
+            x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         elif model_id == 1:
-            # code 0 > scale 0.5
-            # code 1 > no change
-            # code 2 > scale 2
-            x[0] = F.interpolate(x[0].float(), scale_factor=0.5, mode='nearest').long()
-            #x[2] = F.interpolate(x[2].float(), scale_factor=2, mode='nearest').long()
-        """
-        elif model_id == 2:
-            # code 0 > scale 0.25
-            # code 1 > scale 0.5
-            # code 2 > no change
-            x[0] = F.interpolate(x[0].float(), scale_factor=0.25, mode='nearest').long()
-            x[1] = F.interpolate(x[1].float(), scale_factor=0.5, mode='nearest').long()
-        """
-        # apply embedding
-        y = [None for _ in range(len(x))]
-        for i in range(len(x)):
-            y[i] = self.embedding(x[i]).permute(0, 1, 5, 2, 3, 4)
-        #print(" after embedding " , [item.size() for item in x]) # now you have x=[code1,code2,code3] each code
-        # concat
-        x = torch.cat(y, dim=2)
-        # print("after concat x.size() = ", x.size(), "model_id = ", model_id)
-
+            x = input[1]['code']
+            x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
             y = [None for _ in range(x.size(1))]
@@ -182,7 +159,6 @@ class ConvLSTMCell(nn.Module):
                             pass
                 if j == 0:
                     hx[i], cx[i] = self.hidden[0][i], self.hidden[1][i]
-
                 gates += self.cell[i]['hidden'](hx[i])
                 ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
                 ingate = torch.sigmoid(ingate)
@@ -197,10 +173,10 @@ class ConvLSTMCell(nn.Module):
         # mapping from out_size channel to number of embeddings
         y = [None for _ in range(x.size(1))]
         for j in range(x.size(1)):
-            y[j] = self.Conv3d_map(x[:, j])
+            y[j] = self.classifier(x[:, j])
         x = torch.stack(y, dim=1)
-        output['score'] = x  # .argmax(dim=2 ,keepdim=False)
-        output['loss'] = F.cross_entropy(output['score'].permute(0, 2, 1, 3, 4, 5), input[model_id]['ncode'])
+        output['score'] = x.permute(0, 2, 1, 3, 4, 5)
+        output['loss'] = F.cross_entropy(output['score'], input[model_id]['ncode'])
         self.free_hidden()
         return output
 
@@ -240,7 +216,6 @@ def conv_lstm():
     conv_lstm_info['output_size'] = cfg['conv_lstm']['output_size']
     conv_lstm_info['num_embedding'] = cfg[cfg['ae_name']]['num_embedding']
     conv_lstm_info['embedding_size'] = cfg['conv_lstm']['embedding_size']
-
     model = nn.ModuleList([ConvLSTMCell(conv_lstm_info) for _ in range(depth)])
     model.apply(init_param)
     return model

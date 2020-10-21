@@ -37,8 +37,6 @@ def main():
     seeds = list(range(cfg['init_seed'], cfg['init_seed'] + cfg['num_experiments']))
     for i in range(cfg['num_experiments']):
         ae_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['ae_name'], cfg['control_name']]
-        if cfg['ae_name']=='vqvae':
-            ae_tag_list.insert(4,str(cfg['vqvae']['depth']))
         model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], cfg['control_name']]
         cfg['ae_tag'] = '_'.join([x for x in ae_tag_list if x])
         cfg['model_tag'] = '_'.join([x for x in model_tag_list if x])
@@ -75,12 +73,8 @@ def runExperiment():
         model = torch.nn.DataParallel(model, device_ids=list(range(cfg['world_size'])))
     for epoch in range(last_epoch, cfg['num_epochs'] + 1):
         logger.safe(True)
-
-        for model_id in range(cfg[cfg['ae_name']]['depth']):
-            # model_id: 1,2,3 > predict code 1,2,3
-            train(dataset['train'], model[model_id], optimizer, logger, epoch, model_id)
-            test(dataset['test'], model[model_id], logger, epoch, model_id)
-
+        train(dataset['train'], model, optimizer, logger, epoch)
+        test(dataset['test'], model, logger, epoch)
         if cfg['scheduler_name'] == 'ReduceLROnPlateau':
             scheduler.step(metrics=logger.mean['train/{}'.format(cfg['pivot_metric'])])
         else:
@@ -101,32 +95,24 @@ def runExperiment():
     return
 
 
-def train(dataset, model, optimizer, logger, epoch, model_id):
+def train(dataset, model, optimizer, logger, epoch):
     metric = Metric()
     model.train(True)
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
-    # print("len(dataset[0]) = ",len(dataset[0])," dataset[0][model_id]['code'].size() = ", dataset[0][model_id][
-    # 'code'].size()) # gives you the target spatial dimension
-    # hidden = [[None for _ in range(cfg['conv_lstm']['num_layers'])], [None for _ in range(cfg['conv_lstm'][
-    # 'num_layers'])]] # two hidden
-    # for k in range(cfg['conv_lstm']['num_layers']):
-    # new_hidden = init_hidden(
-    #     (dataset[0][0]['code'].size(0), cfg['conv_lstm']['output_size'], *dataset[0][model_id]['code'].size()[2:]))
-    # hidden[0][k], hidden[1][k] = new_hidden[0][0], new_hidden[1][0]
     for i, input in enumerate(dataset):
         loss = []
         input_size = input[0]['code'].size(0)
-        optimizer.zero_grad()
         input = to_device(input, cfg['device'])
-        # for k in range(cfg['conv_lstm']['num_layers']):
-        #     hidden[0][k], hidden[1][k] = repackage_hidden(hidden[0][k]), repackage_hidden(hidden[1][k])
-        output = model(input, model_id=model_id)
-        output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-        output['loss'].backward()
-        loss.append(output['loss'])
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
-        optimizer.step()
+        for model_id in range(cfg[cfg['ae_name']]['depth']):
+            optimizer.zero_grad()
+            output = model[model_id](input, model_id=model_id)
+            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
+            output['loss'].backward()
+            torch.nn.utils.clip_grad_norm_(model[model_id].parameters(), 1)
+            optimizer.step()
+            loss.append(output['loss'])
+        print(loss)
         output = {'loss': sum(loss) / len(input)}
         evaluation = metric.evaluate(cfg['metric_name']['train'], input, output)
         logger.append(evaluation, 'train', n=input_size)
@@ -145,7 +131,7 @@ def train(dataset, model, optimizer, logger, epoch, model_id):
     return
 
 
-def test(dataset, model, logger, epoch, model_id):
+def test(dataset, model, logger, epoch):
     with torch.no_grad():
         metric = Metric()
         model.train(False)
@@ -154,9 +140,11 @@ def test(dataset, model, logger, epoch, model_id):
             loss = []
             input_size = input[0]['code'].size(0)
             input = to_device(input, cfg['device'])
-            output = model(input, model_id=model_id)
-            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-            loss.append(output['loss'])
+            for model_id in range(cfg[cfg['ae_name']]['depth']):
+                output = model[model_id](input, model_id=model_id)
+                output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
+                loss.append(output['loss'])
+            print(loss)
             output = {'loss': sum(loss) / len(input)}
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
             logger.append(evaluation, 'test', input_size)
