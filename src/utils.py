@@ -109,7 +109,7 @@ def process_control():
     cfg['d_mode'] = [str(x) for x in cfg['control']['d_mode'].split('-')]
     cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
     cfg['vqvae'] = {'hidden_size': 128, 'depth': 2, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
-                    'num_embedding': 512, 'vq_commit': 1}
+                    'num_embedding': 512, 'vq_commit': 0.25}
     cfg['transformer'] = {'embedding_size': 16, 'num_heads': 4, 'hidden_size': 32, 'num_layers': 2,
                           'dropout': 0.2}
     cfg['conv_lstm'] = {'output_size': 64, 'num_layers': 2, 'embedding_size': 64}

@@ -88,7 +88,7 @@ class Decoder(nn.Module):
 
 
 class VQVAE(nn.Module):
-    def __init__(self, input_size=3, hidden_size=128, depth=3, num_res_block=2, res_size=32, embedding_size=64,
+    def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32, embedding_size=64,
                  num_embedding=512, d_mode='exact', d_commit=None, vq_commit=0.25):
         super().__init__()
         self.upsampler, self.encoder, self.encoder_conv, self.quantizer, self.decoder = [], [], [], [], []
@@ -97,20 +97,26 @@ class VQVAE(nn.Module):
                 self.upsampler.append(None)
                 self.encoder.append(Encoder(input_size, hidden_size, num_res_block, res_size, stride=4))
                 if depth > 1:
-                    self.encoder_conv.append(nn.Conv3d(hidden_size + embedding_size, embedding_size, 1, 1, 0))
+                    self.encoder_conv.append(
+                        nn.Sequential(nn.Conv3d(hidden_size + embedding_size, embedding_size, 1, 1, 0),
+                                      nn.BatchNorm3d(embedding_size)))
                 else:
-                    self.encoder_conv.append(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0))
-                self.quantizer.append(VectorQuantization(embedding_size, num_embedding))
+                    self.encoder_conv.append(
+                        nn.Sequential(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0), nn.BatchNorm3d(embedding_size)))
+                self.quantizer.append(VectorQuantization(embedding_size, num_embedding, vq_commit))
                 self.decoder.append(Decoder(embedding_size * depth, input_size, hidden_size,
                                             num_res_block, res_size, stride=4))
             else:
                 self.upsampler.append(nn.ConvTranspose3d(embedding_size, embedding_size, 4, 2, 1))
                 self.encoder.append(Encoder(hidden_size, hidden_size, num_res_block, res_size, stride=2))
                 if i == depth - 1:
-                    self.encoder_conv.append(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0))
+                    self.encoder_conv.append(
+                        nn.Sequential(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0), nn.BatchNorm3d(embedding_size)))
                 else:
-                    self.encoder_conv.append(nn.Conv3d(hidden_size + embedding_size, embedding_size, 1, 1, 0))
-                self.quantizer.append(VectorQuantization(embedding_size, num_embedding))
+                    self.encoder_conv.append(
+                        nn.Sequential(nn.Conv3d(hidden_size + embedding_size, embedding_size, 1, 1, 0),
+                                      nn.BatchNorm3d(embedding_size)))
+                self.quantizer.append(VectorQuantization(embedding_size, num_embedding, vq_commit))
                 self.decoder.append(Decoder(embedding_size, embedding_size, hidden_size,
                                             num_res_block, res_size, stride=2))
         self.upsampler = nn.ModuleList(self.upsampler)
@@ -121,7 +127,6 @@ class VQVAE(nn.Module):
         self.depth = depth
         self.d_mode = d_mode
         self.d_commit = d_commit
-        self.vq_commit = vq_commit
 
     def encode(self, input):
         encoded = [None for _ in range(self.depth)]
@@ -166,7 +171,7 @@ class VQVAE(nn.Module):
         decoded = self.decode(quantized)
         output['uvw'] = decoded
         output['duvw'] = spectral_derivative_3d(output['uvw'])
-        output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + self.vq_commit * (sum(diff) / len(diff))
+        output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + (sum(diff) / len(diff))
         for i in range(len(self.d_mode)):
             if self.d_mode[i] == 'exact':
                 output['loss'] += self.d_commit[i] * F.mse_loss(output['duvw'], input['duvw'])

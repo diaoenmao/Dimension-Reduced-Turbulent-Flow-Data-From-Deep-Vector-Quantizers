@@ -136,9 +136,12 @@ class ConvLSTMCell(nn.Module):
         # x = torch.cat(y, dim=2)
         if model_id == 0:
             x = input[0]['code']
+            print(x.unique())
             x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         elif model_id == 1:
             x = input[1]['code']
+            print(x.unique())
+            exit()
             x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
