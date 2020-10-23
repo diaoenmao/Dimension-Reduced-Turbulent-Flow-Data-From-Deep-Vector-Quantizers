@@ -92,8 +92,7 @@ class VQVAE(nn.Module):
                  num_embedding=512, d_mode='exact', d_commit=None, vq_commit=0.25):
         super().__init__()
         self.encoder = Encoder(input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
-        self.encoder_conv = nn.Sequential(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0),
-                                          nn.BatchNorm3d(embedding_size))
+        self.encoder_conv = nn.Conv3d(hidden_size, embedding_size, 1, 1, 0)
         self.quantizer = VectorQuantization(embedding_size, num_embedding, vq_commit)
         self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
         self.d_mode = d_mode
