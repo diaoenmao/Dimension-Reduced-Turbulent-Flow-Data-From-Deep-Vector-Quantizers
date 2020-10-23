@@ -10,17 +10,18 @@ from config import cfg
 class PositionalEmbedding(nn.Module):
     def __init__(self, embedding_size):
         super().__init__()
+        self.data_shape = [cfg['bptt'], 32, 32, 32]
         self.positional_embedding = nn.ModuleList(
-            [nn.Embedding(cfg['data_shape'][i], embedding_size) for i in range(len(cfg['data_shape']))])
+            [nn.Embedding(self.data_shape[i], embedding_size) for i in range(len(self.data_shape))])
 
-    def forward(self, x):
-        shape = x.size()[1:]
+    def forward(self, input):
+        shape = input.size()[1:]
         x = 0
         for i in range(len(shape)):
             expand_shape = [1 for i in range(len(shape))]
             expand_shape[i] = shape[i]
-            position = torch.arange(shape[i], dtype=torch.long, device=x.device).view(1, *expand_shape)
-            x = x + self.positional_embedding(position)
+            position = torch.arange(shape[i], dtype=torch.long, device=input.device).view(1, *expand_shape)
+            x = x + self.positional_embedding[i](position)
         return x
 
 
@@ -87,6 +88,7 @@ class MultiheadAttention(nn.Module):
         q, attn = self.attention(q, k, v, mask)
         q = self._reshape_from_batches(q)
         q = self.linear_o(q)
+        exit()
         return q, attn
 
 

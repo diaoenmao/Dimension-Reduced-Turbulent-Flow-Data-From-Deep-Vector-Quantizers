@@ -100,7 +100,7 @@ def train(dataset, model, optimizer, logger, epoch):
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
     for i, input in enumerate(dataset):
-        input_size = input[0]['code'].size(0)
+        input_size = input['code'].size(0)
         optimizer.zero_grad()
         input = to_device(input, cfg['device'])
         output = model(input)
@@ -131,7 +131,7 @@ def test(dataset, model, logger, epoch):
         model.train(False)
         dataset = BatchDataset(dataset, cfg['bptt'])
         for i, input in enumerate(dataset):
-            input_size = input[0]['code'].size(0)
+            input_size = input['code'].size(0)
             input = to_device(input, cfg['device'])
             output = model(input)
             output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
