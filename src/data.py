@@ -44,7 +44,7 @@ class BatchDataset(Dataset):
         super().__init__()
         self.dataset = dataset
         self.seq_length = seq_length
-        self.S = dataset.size(1)
+        self.S =dataset[list(dataset.keys())[0]].size(1) if isinstance(self.dataset, dict) else dataset.size(1)
         self.idx = list(range(0, self.S - 1, seq_length))
 
     def __len__(self):
@@ -52,6 +52,12 @@ class BatchDataset(Dataset):
 
     def __getitem__(self, index):
         seq_length = min(self.seq_length, self.S - 1 - index)
-        input = {'code': self.dataset[:, self.idx[index]:self.idx[index] + seq_length],
-                 'ncode': self.dataset[:, self.idx[index + 1]:self.idx[index + 1] + seq_length]}
+        if isinstance(self.dataset, dict):
+            input = {'code': self.dataset['code'][:, self.idx[index]:self.idx[index] + seq_length],
+                     'ncode': self.dataset['code'][:, self.idx[index + 1]:self.idx[index + 1] + seq_length],
+                     'quantized': self.dataset['quantized'][:, self.idx[index]:self.idx[index] + seq_length],
+                     'nquantized': self.dataset['quantized'][:, self.idx[index + 1]:self.idx[index + 1] + seq_length]}
+        else:
+            input = {'code': self.dataset[:, self.idx[index]:self.idx[index] + seq_length],
+                     'ncode': self.dataset[:, self.idx[index + 1]:self.idx[index + 1] + seq_length]}
         return input

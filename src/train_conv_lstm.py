@@ -49,9 +49,11 @@ def runExperiment():
     seed = int(cfg['model_tag'].split('_')[0])
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    dataset = {}
-    dataset['train'] = load('./output/code/train_{}.pt'.format(cfg['ae_tag']))
-    dataset['test'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
+    dataset = {'train' : {}, 'test' : {}}
+    dataset['train']['code'] = load('./output/code/train_{}.pt'.format(cfg['ae_tag']))
+    dataset['train']['quantized'] = load('./output/quantized/train_{}.pt'.format(cfg['ae_tag']))
+    dataset['test']['code'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
+    dataset['test']['quantized'] = load('./output/quantized/test_{}.pt'.format(cfg['ae_tag']))
     process_dataset(dataset)
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     optimizer = make_optimizer(model)

@@ -117,8 +117,8 @@ class ConvLSTMCell(nn.Module):
         if self.hidden is None:
             self.hidden = hidden
         output = {}
-        x = input['code']
-        x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
+        x = input['quantized']
+        #x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
             y = [None for _ in range(x.size(1))]

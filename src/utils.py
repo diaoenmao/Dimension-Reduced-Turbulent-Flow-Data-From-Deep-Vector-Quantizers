@@ -100,7 +100,11 @@ def recur(fn, input, *args):
 def process_dataset(dataset):
     if cfg['model_name'] in ['transformer', 'conv_lstm']:
         for split in dataset:
-            dataset[split] = batchify(dataset[split], cfg['batch_size'][split])
+            if isinstance(dataset[split], dict):            
+                for item in dataset[split]:            
+                    dataset[split][item] = batchify(dataset[split][item], cfg['batch_size'][split])
+            else:
+                dataset[split] = batchify(dataset[split], cfg['batch_size'][split])
     return
 
 
@@ -113,6 +117,7 @@ def process_control():
                           'dropout': 0.2}
     cfg['conv_lstm'] = {'output_size': 64, 'num_layers': 2, 'embedding_size': 64}
     cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
+    cfg['conv_lstm']['input_data'] = 'code' # 'quantized'
     if cfg['data_name'] in ['Turb']:
         if cfg['model_name'] in ['vqvae']:
             cfg['data_shape'] = [3, 128, 128, 128]

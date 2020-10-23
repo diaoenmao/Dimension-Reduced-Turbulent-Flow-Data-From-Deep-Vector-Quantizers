@@ -44,10 +44,12 @@ def runExperiment():
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     load_tag = 'best'
     last_epoch, model, _, _, _ = resume(model, cfg['model_tag'], load_tag=load_tag)
-    train_code = encode(data_loader['train'], model)
-    test_code = encode(data_loader['test'], model)
+    train_code, train_quantized = encode(data_loader['train'], model)
+    test_code, test_quantized = encode(data_loader['test'], model)
     save(train_code, './output/code/train_{}.pt'.format(cfg['model_tag']))
-    save(test_code, './output/code/test_{}.pt'.format(cfg['model_tag']))
+    save(test_code, './output/code/test_{}.pt'.format(cfg['model_tag']))    
+    save(train_quantized, './output/quantized/train_{}.pt'.format(cfg['model_tag']))
+    save(test_quantized, './output/quantized/test_{}.pt'.format(cfg['model_tag']))
     return
 
 
@@ -55,13 +57,16 @@ def encode(data_loader, model):
     with torch.no_grad():
         model.train(False)
         code = []
+        quantized= []
         for i, input in enumerate(data_loader):
             input = collate(input)
             input = to_device(input, cfg['device'])
-            _, _, code_i = model.encode(input['uvw'])
+            quantized_i, _, code_i = model.encode(input['uvw'])
             code.append(code_i)
+            quantized.append(quantized_i)
         code = torch.cat(code, dim=0)
-    return code
+        quantized = torch.cat(quantized, dim=0)
+    return code, quantized
 
 
 if __name__ == "__main__":
