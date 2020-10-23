@@ -149,13 +149,23 @@ class ConvLSTMCell(nn.Module):
                 y[j] = hx[i]
             x = torch.stack(y, dim=1)
         self.hidden = [hx, cx]
-        # mapping from out_size channel to number of embeddings
-        y = [None for _ in range(x.size(1))]
-        for j in range(x.size(1)):
-            y[j] = self.classifier(x[:, j])
-        x = torch.stack(y, dim=1)
-        output['score'] = x.permute(0, 2, 1, 3, 4, 5)
-        output['loss'] = F.cross_entropy(output['score'], input['ncode'])
+        classification= False
+        if classification:
+        # classification
+            # mapping from out_size channel to number of embeddings
+            y = [None for _ in range(x.size(1))]
+            for j in range(x.size(1)):
+                y[j] = self.classifier(x[:, j])
+            x = torch.stack(y, dim=1)
+            output['score'] = x.permute(0, 2, 1, 3, 4, 5)
+            output['loss'] = F.cross_entropy(output['score'], input['ncode'])
+        else:            
+        # regression
+            output['score'] = x
+            output['loss'] = F.mse_loss(output['score'], input['nquantized'], reduction='mean')
+            
+            
+            
         self.free_hidden()
         return output
 
