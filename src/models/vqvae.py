@@ -5,9 +5,6 @@ from config import cfg
 from modules import VectorQuantization
 from .utils import init_param, spectral_derivative_3d, physics
 
-Normalization = nn.BatchNorm3d
-Activation = nn.ReLU
-
 
 class ResBlock(nn.Module):
     def __init__(self, hidden_size, res_size):
@@ -33,18 +30,18 @@ class Encoder(nn.Module):
         if stride == 4:
             blocks = [
                 nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
-                Normalization(hidden_size // 2),
-                Activation(inplace=True),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
                 nn.Conv3d(hidden_size // 2, hidden_size, 4, 2, 1),
-                Normalization(hidden_size),
-                Activation(inplace=True),
+                nn.BatchNorm3d(hidden_size),
+                nn.ReLU(inplace=True),
                 nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
             ]
         elif stride == 2:
             blocks = [
                 nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
-                Normalization(hidden_size // 2),
-                Activation(inplace=True),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
                 nn.Conv3d(hidden_size // 2, hidden_size, 3, 1, 1),
             ]
         else:
@@ -52,8 +49,8 @@ class Encoder(nn.Module):
         for i in range(num_res_block):
             blocks.append(ResBlock(hidden_size, res_size))
         blocks.extend([
-            Normalization(hidden_size),
-            Activation(inplace=True)])
+            nn.BatchNorm3d(hidden_size),
+            nn.ReLU(inplace=True)])
         self.blocks = nn.Sequential(*blocks)
 
     def forward(self, input):
@@ -68,17 +65,17 @@ class Decoder(nn.Module):
             blocks.append(ResBlock(hidden_size, res_size))
         if stride == 4:
             blocks.extend([
-                Normalization(hidden_size),
-                Activation(inplace=True),
+                nn.BatchNorm3d(hidden_size),
+                nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
-                Normalization(hidden_size // 2),
-                Activation(inplace=True),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size // 2, output_size, 4, 2, 1),
             ])
         elif stride == 2:
             blocks.extend([
-                Normalization(hidden_size),
-                Activation(inplace=True),
+                nn.BatchNorm3d(hidden_size),
+                nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size, output_size, 4, 2, 1)
             ])
         self.blocks = nn.Sequential(*blocks)
