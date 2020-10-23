@@ -2,7 +2,7 @@
 # control
 control:
   d_mode: 'exact-physics'
-  d_commit: '0-0'
+  d_commit: '0.01-0.001'
 # data
 data_name: Turb
 subset: uvw

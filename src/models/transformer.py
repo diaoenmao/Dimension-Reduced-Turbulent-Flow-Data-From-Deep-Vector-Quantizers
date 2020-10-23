@@ -165,14 +165,12 @@ class Transformer(nn.Module):
 
 
 def transformer():
-    depth = cfg[cfg['ae_name']]['depth']
     num_embedding = cfg[cfg['ae_name']]['num_embedding']
     embedding_size = cfg['transformer']['embedding_size']
     num_heads = cfg['transformer']['num_heads']
     hidden_size = cfg['transformer']['hidden_size']
     num_layers = cfg['transformer']['num_layers']
     dropout = cfg['transformer']['dropout']
-    model = nn.ModuleList([Transformer(num_embedding, embedding_size, num_heads, hidden_size, num_layers, dropout)
-                           for _ in range(depth)])
+    model = Transformer(num_embedding, embedding_size, num_heads, hidden_size, num_layers, dropout)
     model.apply(init_param)
     return model

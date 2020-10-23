@@ -113,36 +113,12 @@ class ConvLSTMCell(nn.Module):
         self.hidden = None
         return
 
-    def forward(self, input, hidden=None, model_id=0):
+    def forward(self, input, hidden=None):
         if self.hidden is None:
             self.hidden = hidden
         output = {}
-        # x = []
-        # for i in range(len(input)):
-        #     x.append(input[i]['code'])
-        # if model_id == 0:
-        #     # code 0 > no change
-        #     # code 1 > scale 2
-        #     x[1] = F.interpolate(x[1].float(), scale_factor=2, mode='nearest').long()
-        # elif model_id == 1:
-        #     # code 0 > scale 0.5
-        #     # code 1 > no change
-        #     x[0] = F.interpolate(x[0].float(), scale_factor=0.5, mode='nearest').long()
-        # # apply embedding
-        # y = [None for _ in range(len(x))]
-        # for i in range(len(x)):
-        #     y[i] = self.embedding(x[i]).permute(0, 1, 5, 2, 3, 4)
-        # # concat
-        # x = torch.cat(y, dim=2)
-        if model_id == 0:
-            x = input[0]['code']
-            print(x.unique())
-            x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
-        elif model_id == 1:
-            x = input[1]['code']
-            print(x.unique())
-            exit()
-            x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
+        x = input['code']
+        x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
             y = [None for _ in range(x.size(1))]
@@ -179,7 +155,7 @@ class ConvLSTMCell(nn.Module):
             y[j] = self.classifier(x[:, j])
         x = torch.stack(y, dim=1)
         output['score'] = x.permute(0, 2, 1, 3, 4, 5)
-        output['loss'] = F.cross_entropy(output['score'], input[model_id]['ncode'])
+        output['loss'] = F.cross_entropy(output['score'], input['ncode'])
         self.free_hidden()
         return output
 
@@ -215,7 +191,7 @@ def conv_lstm():
     conv_lstm_info = {}
     conv_lstm_info['num_layers'] = cfg['conv_lstm']['num_layers']
     conv_lstm_info['activation'] = 'tanh'
-    conv_lstm_info['input_size'] = cfg['conv_lstm']['input_size']  # cfg['conv_lstm']['input_size']
+    conv_lstm_info['input_size'] = cfg['conv_lstm']['input_size']
     conv_lstm_info['output_size'] = cfg['conv_lstm']['output_size']
     conv_lstm_info['num_embedding'] = cfg[cfg['ae_name']]['num_embedding']
     conv_lstm_info['embedding_size'] = cfg['conv_lstm']['embedding_size']

@@ -91,76 +91,27 @@ class VQVAE(nn.Module):
     def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32, embedding_size=64,
                  num_embedding=512, d_mode='exact', d_commit=None, vq_commit=0.25):
         super().__init__()
-        self.upsampler, self.encoder, self.encoder_conv, self.quantizer, self.decoder = [], [], [], [], []
-        for i in range(depth):
-            if i == 0:
-                self.upsampler.append(None)
-                self.encoder.append(Encoder(input_size, hidden_size, num_res_block, res_size, stride=4))
-                if depth > 1:
-                    self.encoder_conv.append(
-                        nn.Sequential(nn.Conv3d(hidden_size + embedding_size, embedding_size, 1, 1, 0),
-                                      nn.BatchNorm3d(embedding_size)))
-                else:
-                    self.encoder_conv.append(
-                        nn.Sequential(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0), nn.BatchNorm3d(embedding_size)))
-                self.quantizer.append(VectorQuantization(embedding_size, num_embedding, vq_commit))
-                self.decoder.append(Decoder(embedding_size * depth, input_size, hidden_size,
-                                            num_res_block, res_size, stride=4))
-            else:
-                self.upsampler.append(nn.ConvTranspose3d(embedding_size, embedding_size, 4, 2, 1))
-                self.encoder.append(Encoder(hidden_size, hidden_size, num_res_block, res_size, stride=2))
-                if i == depth - 1:
-                    self.encoder_conv.append(
-                        nn.Sequential(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0), nn.BatchNorm3d(embedding_size)))
-                else:
-                    self.encoder_conv.append(
-                        nn.Sequential(nn.Conv3d(hidden_size + embedding_size, embedding_size, 1, 1, 0),
-                                      nn.BatchNorm3d(embedding_size)))
-                self.quantizer.append(VectorQuantization(embedding_size, num_embedding, vq_commit))
-                self.decoder.append(Decoder(embedding_size, embedding_size, hidden_size,
-                                            num_res_block, res_size, stride=2))
-        self.upsampler = nn.ModuleList(self.upsampler)
-        self.encoder = nn.ModuleList(self.encoder)
-        self.encoder_conv = nn.ModuleList(self.encoder_conv)
-        self.quantizer = nn.ModuleList(self.quantizer)
-        self.decoder = nn.ModuleList(self.decoder)
-        self.depth = depth
+        self.encoder = Encoder(input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
+        self.encoder_conv = nn.Sequential(nn.Conv3d(hidden_size, embedding_size, 1, 1, 0),
+                                          nn.BatchNorm3d(embedding_size))
+        self.quantizer = VectorQuantization(embedding_size, num_embedding, vq_commit)
+        self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
         self.d_mode = d_mode
         self.d_commit = d_commit
 
     def encode(self, input):
-        encoded = [None for _ in range(self.depth)]
-        quantized = [None for _ in range(self.depth)]
-        diff = [None for _ in range(self.depth)]
-        code = [None for _ in range(self.depth)]
-        decoded = [None for _ in range(self.depth)]
         x = input
-        for i in range(self.depth):
-            encoded[i] = self.encoder[i](x)
-            x = encoded[i]
-        for i in range(self.depth - 1, -1, -1):
-            if i < self.depth - 1:
-                encoded[i] = torch.cat([decoded[i + 1], encoded[i]], dim=1)
-            encoded[i] = self.encoder_conv[i](encoded[i])
-            quantized[i], diff[i], code[i] = self.quantizer[i](encoded[i])
-            if i > 0:
-                decoded[i] = self.decoder[i](quantized[i])
+        encoded = self.encoder(x)
+        encoded = self.encoder_conv(encoded)
+        quantized, diff, code = self.quantizer(encoded)
         return quantized, diff, code
 
     def decode(self, quantized):
-        upsampled = [None for _ in range(self.depth)]
-        for i in range(self.depth - 1, -1, -1):
-            upsampled[i] = quantized[i]
-            for j in range(i, 0, -1):
-                upsampled[i] = self.upsampler[j](upsampled[i])
-        upsampled = torch.cat(upsampled, dim=1)
-        decoded = self.decoder[0](upsampled)
+        decoded = self.decoder(quantized)
         return decoded
 
     def decode_code(self, code):
-        quantized = [None for _ in range(self.depth)]
-        for i in range(self.depth):
-            quantized[i] = self.quantizer[i].embedding_code(code[i]).transpose(1, -1).contiguous()
+        quantized = self.quantizer.embedding_code(code).transpose(1, -1).contiguous()
         decoded = self.decode(quantized)
         return decoded
 
@@ -171,7 +122,7 @@ class VQVAE(nn.Module):
         decoded = self.decode(quantized)
         output['uvw'] = decoded
         output['duvw'] = spectral_derivative_3d(output['uvw'])
-        output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + (sum(diff) / len(diff))
+        output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + diff
         for i in range(len(self.d_mode)):
             if self.d_mode[i] == 'exact':
                 output['loss'] += self.d_commit[i] * F.mse_loss(output['duvw'], input['duvw'])

@@ -101,19 +101,14 @@ def train(dataset, model, optimizer, logger, epoch):
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
     for i, input in enumerate(dataset):
-        loss = []
-        input_size = input[0]['code'].size(0)
+        input_size = input['code'].size(0)
         input = to_device(input, cfg['device'])
-        for model_id in range(cfg[cfg['ae_name']]['depth']):
-            optimizer.zero_grad()
-            output = model[model_id](input, model_id=model_id)
-            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-            output['loss'].backward()
-            torch.nn.utils.clip_grad_norm_(model[model_id].parameters(), 1)
-            optimizer.step()
-            loss.append(output['loss'])
-        print(loss)
-        output = {'loss': sum(loss) / len(input)}
+        optimizer.zero_grad()
+        output = model(input)
+        output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
+        output['loss'].backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+        optimizer.step()
         evaluation = metric.evaluate(cfg['metric_name']['train'], input, output)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(dataset) * cfg['log_interval']) + 1) == 0:
@@ -137,15 +132,10 @@ def test(dataset, model, logger, epoch):
         model.train(False)
         dataset = BatchDataset(dataset, cfg['bptt'])
         for i, input in enumerate(dataset):
-            loss = []
-            input_size = input[0]['code'].size(0)
+            input_size = input['code'].size(0)
             input = to_device(input, cfg['device'])
-            for model_id in range(cfg[cfg['ae_name']]['depth']):
-                output = model[model_id](input, model_id=model_id)
-                output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-                loss.append(output['loss'])
-            print(loss)
-            output = {'loss': sum(loss) / len(input)}
+            output = model(input)
+            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
             logger.append(evaluation, 'test', input_size)
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}

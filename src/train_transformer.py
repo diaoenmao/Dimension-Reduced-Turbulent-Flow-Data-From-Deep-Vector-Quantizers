@@ -100,18 +100,14 @@ def train(dataset, model, optimizer, logger, epoch):
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
     for i, input in enumerate(dataset):
-        loss = []
         input_size = input[0]['code'].size(0)
         optimizer.zero_grad()
-        for j in range(len(input)):
-            input[j] = to_device(input[j], cfg['device'])
-            output = model[j](input[j])
-            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-            output['loss'].backward()
-            loss.append(output['loss'])
+        input = to_device(input, cfg['device'])
+        output = model(input)
+        output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
+        output['loss'].backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
-        output = {'loss': sum(loss) / len(input)}
         evaluation = metric.evaluate(cfg['metric_name']['train'], input, output)
         logger.append(evaluation, 'train', n=input_size)
         if i % int((len(dataset) * cfg['log_interval']) + 1) == 0:
@@ -135,14 +131,10 @@ def test(dataset, model, logger, epoch):
         model.train(False)
         dataset = BatchDataset(dataset, cfg['bptt'])
         for i, input in enumerate(dataset):
-            loss = []
             input_size = input[0]['code'].size(0)
-            for j in range(len(input)):
-                input[j] = to_device(input[j], cfg['device'])
-                output = model[j](input[j])
-                output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-                loss.append(output['loss'])
-            output = {'loss': sum(loss) / len(input)}
+            input = to_device(input, cfg['device'])
+            output = model(input)
+            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
             logger.append(evaluation, 'test', input_size)
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
