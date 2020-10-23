@@ -109,10 +109,9 @@ def process_control():
     cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
     cfg['vqvae'] = {'hidden_size': 128, 'depth': 2, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
                     'num_embedding': 512, 'vq_commit': 0.25}
-    cfg['transformer'] = {'embedding_size': 16, 'num_heads': 4, 'hidden_size': 32, 'num_layers': 2,
+    cfg['transformer'] = {'embedding_size': 16, 'num_heads': 4, 'hidden_size': 16, 'num_layers': 2,
                           'dropout': 0.2}
     cfg['conv_lstm'] = {'output_size': 64, 'num_layers': 2, 'embedding_size': 64}
-    # cfg['conv_lstm']['input_size'] = cfg['vqvae']['depth'] * cfg['conv_lstm']['embedding_size']
     cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
     if cfg['data_name'] in ['Turb']:
         if cfg['model_name'] in ['vqvae']:
@@ -134,13 +133,11 @@ def process_control():
         elif cfg['model_name'] in ['transformer']:
             cfg['batch_size'] = {'train': 1, 'test': 1}
             cfg['num_epochs'] = 200
-            cfg['optimizer_name'] = 'SGD'
-            cfg['lr'] = 1e-1
+            cfg['optimizer_name'] = 'Adam'
+            cfg['lr'] = 1e-3
             cfg['weight_decay'] = 5e-4
-            cfg['scheduler_name'] = 'MultiStepLR'
-            cfg['factor'] = 0.1
-            cfg['milestones'] = [25, 50]
-            cfg['bptt'] = 4
+            cfg['scheduler_name'] = 'ReduceLROnPlateau'
+            cfg['bptt'] = 20
         else:
             raise ValueError('Not valid model name')
     return

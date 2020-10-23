@@ -10,18 +10,12 @@ from config import cfg
 class PositionalEmbedding(nn.Module):
     def __init__(self, embedding_size):
         super().__init__()
-        self.data_shape = [cfg['bptt'], 32, 32, 32]
-        self.positional_embedding = nn.ModuleList(
-            [nn.Embedding(self.data_shape[i], embedding_size) for i in range(len(self.data_shape))])
+        self.positional_embedding = nn.Embedding(cfg['bptt'], embedding_size)
 
-    def forward(self, input):
-        shape = input.size()[1:]
-        x = 0
-        for i in range(len(shape)):
-            expand_shape = [1 for i in range(len(shape))]
-            expand_shape[i] = shape[i]
-            position = torch.arange(shape[i], dtype=torch.long, device=input.device).view(1, *expand_shape)
-            x = x + self.positional_embedding[i](position)
+    def forward(self, x):
+        N, S, H, W, D = x.size()
+        position = torch.arange(S, dtype=torch.long, device=x.device).view(1, -1, 1, 1, 1).expand((N, S, H, W, D))
+        x = self.positional_embedding(position)
         return x
 
 
@@ -60,10 +54,10 @@ class MultiheadAttention(nn.Module):
         super().__init__()
         self.embedding_size = embedding_size
         self.num_heads = num_heads
-        self.linear_q = nn.Linear(embedding_size, embedding_size)
-        self.linear_k = nn.Linear(embedding_size, embedding_size)
-        self.linear_v = nn.Linear(embedding_size, embedding_size)
-        self.linear_o = nn.Linear(embedding_size, embedding_size)
+        self.conv_q = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
+        self.conv_k = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
+        self.conv_v = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
+        self.conv_o = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
         self.attention = ScaledDotProduct(temperature=(embedding_size // num_heads) ** 0.5)
 
     def _reshape_to_batches(self, x):
@@ -79,16 +73,25 @@ class MultiheadAttention(nn.Module):
         return x.reshape(batch_size, self.num_heads, H, W, D, seq_len, in_feature).permute(0, 5, 2, 3, 4, 1, 6) \
             .reshape(batch_size, seq_len, H, W, D, out_dim)
 
+    def _reshape_to_conv3d(self, x):
+        return x.view(-1, *x.size()[2:]).permute(0, 4, 1, 2, 3)
+
+    def _reshape_from_conv3d(self, x, N):
+        return x.permute(0, 2, 3, 4, 1).view(N, -1, *x.size()[2:], x.size(1))
+
     def forward(self, q, k, v, mask=None):
         N, _, H, W, D, _ = q.size()
-        q, k, v = self.linear_q(q), self.linear_k(k), self.linear_v(v)
+        q, k, v = self._reshape_to_conv3d(q), self._reshape_to_conv3d(k), self._reshape_to_conv3d(v)
+        q, k, v = self.conv_q(q), self.conv_k(k), self.conv_v(v)
+        q, k, v = self._reshape_from_conv3d(q, N), self._reshape_from_conv3d(k, N), self._reshape_from_conv3d(v, N)
         q, k, v = self._reshape_to_batches(q), self._reshape_to_batches(k), self._reshape_to_batches(v)
         if mask is not None:
             mask = mask.repeat(self.num_heads, H, W, D, 1, 1)
         q, attn = self.attention(q, k, v, mask)
         q = self._reshape_from_batches(q)
-        q = self.linear_o(q)
-        exit()
+        q = self._reshape_to_conv3d(q)
+        q = self.conv_o(q)
+        q = self._reshape_from_conv3d(q, N)
         return q, attn
 
 

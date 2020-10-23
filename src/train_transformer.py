@@ -29,7 +29,7 @@ cfg['pivot_metric'] = 'Loss'
 cfg['pivot'] = float('inf')
 cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss']}
 cfg['ae_name'] = 'vqvae'
-
+cfg['model_name'] = 'transformer'
 
 def main():
     process_control()

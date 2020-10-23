@@ -187,7 +187,6 @@ class Cell(nn.Module):
 
 
 def conv_lstm():
-    depth = cfg[cfg['ae_name']]['depth']
     conv_lstm_info = {}
     conv_lstm_info['num_layers'] = cfg['conv_lstm']['num_layers']
     conv_lstm_info['activation'] = 'tanh'
@@ -195,6 +194,6 @@ def conv_lstm():
     conv_lstm_info['output_size'] = cfg['conv_lstm']['output_size']
     conv_lstm_info['num_embedding'] = cfg[cfg['ae_name']]['num_embedding']
     conv_lstm_info['embedding_size'] = cfg['conv_lstm']['embedding_size']
-    model = nn.ModuleList([ConvLSTMCell(conv_lstm_info) for _ in range(depth)])
+    model = ConvLSTMCell(conv_lstm_info)
     model.apply(init_param)
     return model
