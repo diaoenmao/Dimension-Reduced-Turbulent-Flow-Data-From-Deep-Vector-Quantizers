@@ -111,13 +111,12 @@ def process_dataset(dataset):
 def process_control():
     cfg['d_mode'] = [str(x) for x in cfg['control']['d_mode'].split('-')]
     cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
-    cfg['vqvae'] = {'hidden_size': 128, 'depth': 2, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
+    cfg['vqvae'] = {'hidden_size': 128, 'depth': 3, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
                     'num_embedding': 512, 'vq_commit': 0.25}
-    cfg['transformer'] = {'embedding_size': 16, 'num_heads': 4, 'hidden_size': 16, 'num_layers': 2,
+    cfg['transformer'] = {'embedding_size': 16, 'num_heads': 3, 'hidden_size': 16, 'num_layers': 2,
                           'dropout': 0.2}
-    cfg['conv_lstm'] = {'output_size': 64, 'num_layers': 2, 'embedding_size': 64}
+    cfg['conv_lstm'] = {'output_size': 64, 'num_layers': 4, 'embedding_size': 64}
     cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
-    cfg['conv_lstm']['input_data'] = 'code' # 'quantized'
     if cfg['data_name'] in ['Turb']:
         if cfg['model_name'] in ['vqvae']:
             cfg['data_shape'] = [3, 128, 128, 128]

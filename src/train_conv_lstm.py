@@ -102,11 +102,19 @@ def train(dataset, model, optimizer, logger, epoch):
     model.train(True)
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
+    
+    hidden = [[None for _ in range(cfg['conv_lstm']['num_layers'])], [None for _ in range(cfg['conv_lstm']['num_layers'])]] # two hidden
+    for k in range(cfg['conv_lstm']['num_layers']):
+        new_hidden = init_hidden((dataset[0]['code'].size(0), cfg['conv_lstm']['output_size'], *dataset[0]['code'].size()[2:]))
+        hidden[0][k], hidden[1][k] = new_hidden[0][0], new_hidden[1][0]
+    
     for i, input in enumerate(dataset):
         input_size = input['code'].size(0)
         input = to_device(input, cfg['device'])
         optimizer.zero_grad()
-        output = model(input)
+        for k in range(cfg['conv_lstm']['num_layers']):
+            hidden[0][k], hidden[1][k] = repackage_hidden(hidden[0][k]), repackage_hidden(hidden[1][k])
+        output, hidden = model(input, hidden)
         output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
         output['loss'].backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)

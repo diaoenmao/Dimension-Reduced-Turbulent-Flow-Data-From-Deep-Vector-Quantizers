@@ -166,8 +166,8 @@ class ConvLSTMCell(nn.Module):
             
             
             
-        self.free_hidden()
-        return output
+        #self.free_hidden()
+        return (output, self.hidden) if self.training else output
 
 
 class Cell(nn.Module):

@@ -27,7 +27,20 @@ class ResBlock(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, input_size, hidden_size, num_res_block, res_size, stride):
         super().__init__()
-        if stride == 4:
+        if stride == 8:
+            blocks = [
+                nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size  // 2, hidden_size, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
+            ]
+        elif stride == 4:
             blocks = [
                 nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
                 nn.BatchNorm3d(hidden_size // 2),
@@ -63,7 +76,19 @@ class Decoder(nn.Module):
         blocks = [nn.Conv3d(input_size, hidden_size, 3, 1, 1)]
         for i in range(num_res_block):
             blocks.append(ResBlock(hidden_size, res_size))
-        if stride == 4:
+        if stride == 8:
+            blocks.extend([
+                nn.BatchNorm3d(hidden_size),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(hidden_size // 2, output_size, 4, 2, 1),
+            ])
+        elif stride == 4:
             blocks.extend([
                 nn.BatchNorm3d(hidden_size),
                 nn.ReLU(inplace=True),
