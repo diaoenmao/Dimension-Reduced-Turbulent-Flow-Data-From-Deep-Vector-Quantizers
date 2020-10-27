@@ -30,14 +30,14 @@ cfg['pivot'] = float('inf')
 cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss']}
 cfg['ae_name'] = 'vqvae'
 cfg['model_name'] = 'conv_lstm'
-
+cfg['shuffle'] = {'train': False, 'test': False}
 
 def main():
     process_control()
     seeds = list(range(cfg['init_seed'], cfg['init_seed'] + cfg['num_experiments']))
     for i in range(cfg['num_experiments']):
-        ae_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['ae_name'], cfg['control_name']]
-        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], cfg['control_name']]
+        ae_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['ae_name'], 'code'+str(128//2**cfg['vqvae']['depth']), cfg['control_name']]
+        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], *ae_tag_list[3:5], cfg['control_name']]
         cfg['ae_tag'] = '_'.join([x for x in ae_tag_list if x])
         cfg['model_tag'] = '_'.join([x for x in model_tag_list if x])
         print('Experiment: {}'.format(cfg['model_tag']))

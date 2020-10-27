@@ -115,7 +115,7 @@ def process_control():
                     'num_embedding': 512, 'vq_commit': 0.25}
     cfg['transformer'] = {'embedding_size': 16, 'num_heads': 3, 'hidden_size': 16, 'num_layers': 2,
                           'dropout': 0.2}
-    cfg['conv_lstm'] = {'output_size': 64, 'num_layers': 4, 'embedding_size': 64}
+    cfg['conv_lstm'] = {'output_size': 64, 'num_layers': 2, 'embedding_size': 64}
     cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
     if cfg['data_name'] in ['Turb']:
         if cfg['model_name'] in ['vqvae']:
