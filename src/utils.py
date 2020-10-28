@@ -100,8 +100,8 @@ def recur(fn, input, *args):
 def process_dataset(dataset):
     if cfg['model_name'] in ['transformer', 'conv_lstm']:
         for split in dataset:
-            if isinstance(dataset[split], dict):            
-                for item in dataset[split]:            
+            if isinstance(dataset[split], dict):
+                for item in dataset[split]:
                     dataset[split][item] = batchify(dataset[split][item], cfg['batch_size'][split])
             else:
                 dataset[split] = batchify(dataset[split], cfg['batch_size'][split])
@@ -109,13 +109,14 @@ def process_dataset(dataset):
 
 
 def process_control():
+    cfg['depth'] = int(cfg['control']['depth'])
     cfg['d_mode'] = [str(x) for x in cfg['control']['d_mode'].split('-')]
     cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
-    cfg['vqvae'] = {'hidden_size': 128, 'depth': 3, 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
+    cfg['vqvae'] = {'hidden_size': 128, 'depth': cfg['depth'], 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
                     'num_embedding': 512, 'vq_commit': 0.25}
     cfg['transformer'] = {'embedding_size': 16, 'num_heads': 3, 'hidden_size': 16, 'num_layers': 2,
                           'dropout': 0.2}
-    cfg['conv_lstm'] = {'output_size': 64, 'num_layers': 4, 'embedding_size': 64}
+    cfg['conv_lstm'] = {'output_size': 16, 'num_layers': 4, 'embedding_size': 16}
     cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
     if cfg['data_name'] in ['Turb']:
         if cfg['model_name'] in ['vqvae']:
@@ -136,7 +137,7 @@ def process_control():
             cfg['bptt'] = 4
         elif cfg['model_name'] in ['transformer']:
             cfg['batch_size'] = {'train': 1, 'test': 1}
-            cfg['num_epochs'] = 200
+            cfg['num_epochs'] = 250
             cfg['optimizer_name'] = 'Adam'
             cfg['lr'] = 1e-3
             cfg['weight_decay'] = 5e-4

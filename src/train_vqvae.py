@@ -35,7 +35,7 @@ def main():
     process_control()
     seeds = list(range(cfg['init_seed'], cfg['init_seed'] + cfg['num_experiments']))
     for i in range(cfg['num_experiments']):
-        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], 'code'+str(128//2**cfg['vqvae']['depth']), cfg['control_name']]
+        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], cfg['control_name']]
         cfg['model_tag'] = '_'.join([x for x in model_tag_list if x])
         print('Experiment: {}'.format(cfg['model_tag']))
         runExperiment()
@@ -95,7 +95,6 @@ def train(data_loader, model, optimizer, logger, epoch):
     metric = Metric()
     model.train(True)
     start_time = time.time()
-    code = []
     for i, input in enumerate(data_loader):
         input = collate(input)
         input_size = input['uvw'].size(0)
@@ -103,7 +102,6 @@ def train(data_loader, model, optimizer, logger, epoch):
         optimizer.zero_grad()
         output = model(input)
         output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-        code.append(output['code'].cpu())
         output['loss'].backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
@@ -121,8 +119,6 @@ def train(data_loader, model, optimizer, logger, epoch):
                              'Experiment Finished Time: {}'.format(exp_finished_time)]}
             logger.append(info, 'train', mean=False)
             logger.write('train', cfg['metric_name']['train'])
-    code = torch.cat(code, dim=0)
-    print(code.unique().size())
     return
 
 

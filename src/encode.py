@@ -27,7 +27,7 @@ def main():
     process_control()
     seeds = list(range(cfg['init_seed'], cfg['init_seed'] + cfg['num_experiments']))
     for i in range(cfg['num_experiments']):
-        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], 'code'+str(128//2**cfg['vqvae']['depth']), cfg['control_name']]
+        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], cfg['control_name']]
         cfg['model_tag'] = '_'.join([x for x in model_tag_list if x])
         print('Experiment: {}'.format(cfg['model_tag']))
         runExperiment()
@@ -44,12 +44,10 @@ def runExperiment():
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     load_tag = 'best'
     last_epoch, model, _, _, _ = resume(model, cfg['model_tag'], load_tag=load_tag)
-    train_code, train_quantized = encode(data_loader['train'], model)
-    test_code, test_quantized = encode(data_loader['test'], model)
+    train_code = encode(data_loader['train'], model)
+    test_code = encode(data_loader['test'], model)
     save(train_code, './output/code/train_{}.pt'.format(cfg['model_tag']))
-    save(test_code, './output/code/test_{}.pt'.format(cfg['model_tag']))    
-    save(train_quantized, './output/quantized/train_{}.pt'.format(cfg['model_tag']))
-    save(test_quantized, './output/quantized/test_{}.pt'.format(cfg['model_tag']))
+    save(test_code, './output/code/test_{}.pt'.format(cfg['model_tag']))
     return
 
 
@@ -57,16 +55,13 @@ def encode(data_loader, model):
     with torch.no_grad():
         model.train(False)
         code = []
-        quantized= []
         for i, input in enumerate(data_loader):
             input = collate(input)
             input = to_device(input, cfg['device'])
-            quantized_i, _, code_i = model.encode(input['uvw'])
+            _, _, code_i = model.encode(input['uvw'])
             code.append(code_i)
-            quantized.append(quantized_i)
         code = torch.cat(code, dim=0)
-        quantized = torch.cat(quantized, dim=0)
-    return code, quantized
+    return code
 
 
 if __name__ == "__main__":

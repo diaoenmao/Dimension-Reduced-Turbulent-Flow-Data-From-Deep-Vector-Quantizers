@@ -30,14 +30,14 @@ cfg['pivot'] = float('inf')
 cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss']}
 cfg['ae_name'] = 'vqvae'
 cfg['model_name'] = 'conv_lstm'
-cfg['shuffle'] = {'train': False, 'test': False}
+
 
 def main():
     process_control()
     seeds = list(range(cfg['init_seed'], cfg['init_seed'] + cfg['num_experiments']))
     for i in range(cfg['num_experiments']):
-        ae_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['ae_name'], 'code'+str(128//2**cfg['vqvae']['depth']), cfg['control_name']]
-        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], *ae_tag_list[3:5], cfg['control_name']]
+        ae_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['ae_name'], cfg['control_name']]
+        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], cfg['control_name']]
         cfg['ae_tag'] = '_'.join([x for x in ae_tag_list if x])
         cfg['model_tag'] = '_'.join([x for x in model_tag_list if x])
         print('Experiment: {}'.format(cfg['model_tag']))
@@ -49,11 +49,9 @@ def runExperiment():
     seed = int(cfg['model_tag'].split('_')[0])
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    dataset = {'train' : {}, 'test' : {}}
-    dataset['train']['code'] = load('./output/code/train_{}.pt'.format(cfg['ae_tag']))
-    dataset['train']['quantized'] = load('./output/quantized/train_{}.pt'.format(cfg['ae_tag']))
-    dataset['test']['code'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
-    dataset['test']['quantized'] = load('./output/quantized/test_{}.pt'.format(cfg['ae_tag']))
+    dataset = {}
+    dataset['train'] = load('./output/code/train_{}.pt'.format(cfg['ae_tag']))
+    dataset['test'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
     process_dataset(dataset)
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     optimizer = make_optimizer(model)
@@ -102,29 +100,11 @@ def train(dataset, model, optimizer, logger, epoch):
     model.train(True)
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
-    Use_hidden = False
-    Prediction_Phase = True
-    if Use_hidden:
-        hidden = [[None for _ in range(cfg['conv_lstm']['num_layers'])], [None for _ in range(cfg['conv_lstm']['num_layers'])]] # two hidden
-        for k in range(cfg['conv_lstm']['num_layers']):
-            new_hidden = init_hidden((dataset[0]['code'].size(0), cfg['conv_lstm']['output_size'], *dataset[0]['code'].size()[2:]))
-            hidden[0][k], hidden[1][k] = new_hidden[0][0], new_hidden[1][0] 
-    else:
-        hidden = None
-        
     for i, input in enumerate(dataset):
-        if not Prediction_Phase:
-            input['ncode']= input['code']
-            input['nquantized']= input['quantized']
         input_size = input['code'].size(0)
         input = to_device(input, cfg['device'])
         optimizer.zero_grad()
-        if Use_hidden:
-            for k in range(cfg['conv_lstm']['num_layers']):
-                hidden[0][k], hidden[1][k] = repackage_hidden(hidden[0][k]), repackage_hidden(hidden[1][k])
-        output, hidden = model(input, hidden)
-        if not Use_hidden:
-            hidden = None
+        output = model(input)
         output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
         output['loss'].backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
@@ -162,17 +142,6 @@ def test(dataset, model, logger, epoch):
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
     return
-
-
-def init_hidden(hidden_size, dtype=torch.float):
-    hidden = [[torch.zeros(hidden_size, device=cfg['device'], dtype=dtype)],
-              [torch.zeros(hidden_size, device=cfg['device'], dtype=dtype)]]
-    return hidden
-
-
-def repackage_hidden(h):
-    """Wraps hidden states in new Tensors, to detach them from their history."""
-    return h.detach()
 
 
 if __name__ == "__main__":

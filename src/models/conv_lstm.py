@@ -79,9 +79,8 @@ class ConvLSTMCell(nn.Module):
         self.cell = self.make_cell()
         self.hidden = None
         self.embedding = nn.Embedding(cell_info['num_embedding'], cell_info['embedding_size'])
-        self.classifier = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], 1, 1, 0)
-        self.Normalization = nn.BatchNorm3d(cell_info['output_size'])
-        self.Activation = nn.ReLU(inplace=True)
+        self.classifier = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], 3, 1, 1)
+
     def make_cell(self):
         cell_info = copy.deepcopy(self.cell_info)
         cell = nn.ModuleList([nn.ModuleDict({}) for _ in range(cell_info['num_layers'])])
@@ -105,11 +104,6 @@ class ConvLSTMCell(nn.Module):
                   [torch.zeros(hidden_size, device=cfg['device'], dtype=dtype)]]
         return hidden
 
-    def repackage_hidden(self):
-        for i in range(len(self.hidden)):
-            self.hidden[0][i], self.hidden[1][i] = self.hidden[0][i].detach(), self.hidden[1][i].detach()
-        return
-
     def free_hidden(self):
         self.hidden = None
         return
@@ -118,15 +112,10 @@ class ConvLSTMCell(nn.Module):
         if self.hidden is None:
             self.hidden = hidden
         output = {}
-        Use_NewEmbedding = True
-        if Use_NewEmbedding:
-            x = input['code']
-            x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
-        else:            
-            x = input['quantized']
+        x = input['code']
+        x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
-            y = [None for _ in range(x.size(1))]
             for j in range(x.size(1)):
                 gates = self.cell[i]['in'](x[:, j])
                 if hidden is None:
@@ -147,34 +136,15 @@ class ConvLSTMCell(nn.Module):
                 ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
                 ingate = torch.sigmoid(ingate)
                 forgetgate = torch.sigmoid(forgetgate)
-                cellgate = self.cell[i]['activation'][0](cellgate)  # tanh
+                cellgate = self.cell[i]['activation'][0](cellgate)
                 outgate = torch.sigmoid(outgate)
                 cx[i] = (forgetgate * cx[i]) + (ingate * cellgate)
-                hx[i] = outgate * self.cell[i]['activation'][1](cx[i])  # tanh
-                hx[i] = self.Normalization(hx[i])
-                #hx[i] = self.Activation(hx[i]) # did not help
-                y[j] = hx[i]
-            x = torch.stack(y, dim=1)
-        self.hidden = [hx, cx]
-        classification= True
-        if classification:
-        # classification
-            # mapping from out_size channel to number of embeddings
-            y = [None for _ in range(x.size(1))]
-            for j in range(x.size(1)):
-                y[j] = self.classifier(x[:, j])
-            x = torch.stack(y, dim=1)
-            output['score'] = x.permute(0, 2, 1, 3, 4, 5)[:,:,-1]
-            output['loss'] = F.cross_entropy(output['score'], input['ncode'][:,-1])
-        else:            
-        # regression            
-            output['q_score'] = x[:,-1]
-            output['loss'] = F.mse_loss(output['q_score'], input['nquantized'][:,-1], reduction='mean')
-            
-            
-        if hidden == None:
-            self.free_hidden()
-        return (output, self.hidden) if self.training else output
+                hx[i] = outgate * self.cell[i]['activation'][1](cx[i])
+        x = hx[-1]
+        output['score'] = self.classifier(x)
+        output['loss'] = F.cross_entropy(output['score'], input['ncode'])
+        self.free_hidden()
+        return output
 
 
 class Cell(nn.Module):
@@ -207,7 +177,7 @@ def conv_lstm():
     conv_lstm_info = {}
     conv_lstm_info['num_layers'] = cfg['conv_lstm']['num_layers']
     conv_lstm_info['activation'] = 'tanh'
-    conv_lstm_info['normalization'] = 'bn'#'none'#
+    conv_lstm_info['normalization'] = 'none'
     conv_lstm_info['input_size'] = cfg['conv_lstm']['input_size']
     conv_lstm_info['output_size'] = cfg['conv_lstm']['output_size']
     conv_lstm_info['num_embedding'] = cfg[cfg['ae_name']]['num_embedding']

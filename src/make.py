@@ -5,7 +5,8 @@ parser = argparse.ArgumentParser(description='Config')
 parser.add_argument('--run', default='train', type=str)
 parser.add_argument('--model', default=None, type=str)
 parser.add_argument('--round', default=4, type=int)
-parser.add_argument('--num_gpu', default=4, type=int)
+parser.add_argument('--num_gpus', default=4, type=int)
+parser.add_argument('--init_seed', default=0, type=int)
 parser.add_argument('--experiments_step', default=1, type=int)
 parser.add_argument('--num_experiments', default=1, type=int)
 parser.add_argument('--num_epochs', default=200, type=int)
@@ -17,12 +18,13 @@ def main():
     run = args['run']
     model = args['model']
     round = args['round']
-    num_gpu = args['num_gpu']
+    num_gpus = args['num_gpus']
+    init_seed = args['init_seed']
     experiments_step = args['experiments_step']
     num_experiments = args['num_experiments']
     num_epochs = args['num_epochs']
     resume_mode = args['resume_mode']
-    gpu_ids = [str(x) for x in list(range(num_gpu))]
+    gpu_ids = [str(x) for x in list(range(num_gpus))]
     if run in ['train', 'test']:
         filename = '{}_{}'.format(run, model)
         script_name = [['{}_{}.py'.format(run, model)]]
@@ -31,12 +33,12 @@ def main():
         script_name = [['{}.py'.format(run)]]
     data_names = [['Turb']]
     model_names = [[model]]
-    init_seeds = [list(range(0, num_experiments, experiments_step))]
+    init_seeds = [list(range(init_seed, init_seed + num_experiments, experiments_step))]
     num_epochs = [[num_epochs]]
     resume_mode = [[resume_mode]]
     num_experiments = [[experiments_step]]
-    exact_control_name = [['exact'], ['0', '0.01']]
-    physics_control_name = [['physics'], ['0.001']]
+    exact_control_name = [['2', '3'], ['exact'], ['0', '0.01']]
+    physics_control_name = [['physics'], ['0', '0.001']]
     exact_physics_control_name = [['exact-physics'], ['0.01-0.001']]
     control_name = [exact_control_name, physics_control_name, exact_physics_control_name]
     control_names = []
