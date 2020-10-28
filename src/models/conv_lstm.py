@@ -161,12 +161,12 @@ class ConvLSTMCell(nn.Module):
             output['loss'] = F.cross_entropy(output['score'], input['ncode'])
         else:            
         # regression
-            output['score'] = x
-            output['loss'] = F.mse_loss(output['score'], input['nquantized'], reduction='mean')
+            output['q_score'] = x
+            output['loss'] = F.mse_loss(output['q_score'], input['nquantized'], reduction='mean')
             
             
-            
-        #self.free_hidden()
+        if hidden == None:
+            self.free_hidden()
         return (output, self.hidden) if self.training else output
 
 
