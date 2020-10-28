@@ -10,9 +10,9 @@ def Normalization(cell_info):
     if cell_info['mode'] == 'none':
         return nn.Sequential()
     elif cell_info['mode'] == 'bn':
-        return nn.BatchNorm1d(cell_info['input_size'])
+        return nn.BatchNorm3d(cell_info['input_size'])
     elif cell_info['mode'] == 'in':
-        return nn.InstanceNorm1d(cell_info['input_size'])
+        return nn.InstanceNorm3d(cell_info['input_size'])
     elif cell_info['mode'] == 'ln':
         return nn.LayerNorm(cell_info['input_size'])
     else:
@@ -80,7 +80,8 @@ class ConvLSTMCell(nn.Module):
         self.hidden = None
         self.embedding = nn.Embedding(cell_info['num_embedding'], cell_info['embedding_size'])
         self.classifier = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], 1, 1, 0)
-
+        self.Normalization = nn.BatchNorm3d(cell_info['output_size'])
+        self.Activation = nn.ReLU(inplace=True)
     def make_cell(self):
         cell_info = copy.deepcopy(self.cell_info)
         cell = nn.ModuleList([nn.ModuleDict({}) for _ in range(cell_info['num_layers'])])
@@ -89,10 +90,10 @@ class ConvLSTMCell(nn.Module):
                 cell_info['input_size'] = cell_info['output_size']
             cell_in_info = {'cell': 'ConvCell', 'input_size': cell_info['input_size'],
                             'output_size': 4 * cell_info['output_size'],
-                            'normalization': 'none', 'activation': 'none'}
+                            'normalization': cell_info['normalization'], 'activation': 'none'}
             cell_hidden_info = {'cell': 'ConvCell', 'input_size': cell_info['output_size'],
                                 'output_size': 4 * cell_info['output_size'],
-                                'normalization': 'none', 'activation': 'none'}
+                                'normalization': cell_info['normalization'], 'activation': 'none'}
             cell_activation_info = {'cell': 'Activation', 'mode': cell_info['activation']}
             cell[i]['in'] = Cell(cell_in_info)
             cell[i]['hidden'] = Cell(cell_hidden_info)
@@ -117,8 +118,12 @@ class ConvLSTMCell(nn.Module):
         if self.hidden is None:
             self.hidden = hidden
         output = {}
-        x = input['quantized']
-        #x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
+        Use_NewEmbedding = True
+        if Use_NewEmbedding:
+            x = input['code']
+            x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
+        else:            
+            x = input['quantized']
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
             y = [None for _ in range(x.size(1))]
@@ -146,6 +151,8 @@ class ConvLSTMCell(nn.Module):
                 outgate = torch.sigmoid(outgate)
                 cx[i] = (forgetgate * cx[i]) + (ingate * cellgate)
                 hx[i] = outgate * self.cell[i]['activation'][1](cx[i])  # tanh
+                hx[i] = self.Normalization(hx[i])
+                #hx[i] = self.Activation(hx[i]) # did not help
                 y[j] = hx[i]
             x = torch.stack(y, dim=1)
         self.hidden = [hx, cx]
@@ -200,6 +207,7 @@ def conv_lstm():
     conv_lstm_info = {}
     conv_lstm_info['num_layers'] = cfg['conv_lstm']['num_layers']
     conv_lstm_info['activation'] = 'tanh'
+    conv_lstm_info['normalization'] = 'bn'#'none'#
     conv_lstm_info['input_size'] = cfg['conv_lstm']['input_size']
     conv_lstm_info['output_size'] = cfg['conv_lstm']['output_size']
     conv_lstm_info['num_embedding'] = cfg[cfg['ae_name']]['num_embedding']
