@@ -114,7 +114,7 @@ def process_control():
     cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
     cfg['vqvae'] = {'hidden_size': 128, 'depth': cfg['depth'], 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
                     'num_embedding': 512, 'vq_commit': 0.25}
-    cfg['transformer'] = {'embedding_size': 16, 'num_heads': 3, 'hidden_size': 16, 'num_layers': 2,
+    cfg['transformer'] = {'embedding_size': 16, 'num_heads': 1, 'hidden_size': 16, 'num_layers': 2,
                           'dropout': 0.2}
     cfg['conv_lstm'] = {'output_size': 16, 'num_layers': 4, 'embedding_size': 16}
     cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
@@ -142,7 +142,7 @@ def process_control():
             cfg['lr'] = 1e-3
             cfg['weight_decay'] = 5e-4
             cfg['scheduler_name'] = 'ReduceLROnPlateau'
-            cfg['bptt'] = 20
+            cfg['bptt'] = 4
         else:
             raise ValueError('Not valid model name')
     return
