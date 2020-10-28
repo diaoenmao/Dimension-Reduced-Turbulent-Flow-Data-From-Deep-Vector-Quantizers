@@ -39,7 +39,7 @@ min_lr: 1.0e-5
 # experiment
 init_seed: 0
 num_experiments: 1
-num_epochs: 200
+num_epochs: 300
 log_interval: 0.25
 device: cuda
 world_size: 1

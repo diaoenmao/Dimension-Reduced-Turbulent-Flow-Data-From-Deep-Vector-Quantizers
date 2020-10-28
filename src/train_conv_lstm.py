@@ -103,7 +103,7 @@ def train(dataset, model, optimizer, logger, epoch):
     start_time = time.time()
     dataset = BatchDataset(dataset, cfg['bptt'])
     Use_hidden = False
-    Prediction_Phase = False
+    Prediction_Phase = True
     if Use_hidden:
         hidden = [[None for _ in range(cfg['conv_lstm']['num_layers'])], [None for _ in range(cfg['conv_lstm']['num_layers'])]] # two hidden
         for k in range(cfg['conv_lstm']['num_layers']):

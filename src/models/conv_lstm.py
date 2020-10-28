@@ -160,9 +160,9 @@ class ConvLSTMCell(nn.Module):
             output['score'] = x.permute(0, 2, 1, 3, 4, 5)
             output['loss'] = F.cross_entropy(output['score'], input['ncode'])
         else:            
-        # regression
-            output['q_score'] = x
-            output['loss'] = F.mse_loss(output['q_score'], input['nquantized'], reduction='mean')
+        # regression            
+            output['q_score'] = x[:,-1]
+            output['loss'] = F.mse_loss(output['q_score'], input['nquantized'][:,-1], reduction='mean')
             
             
         if hidden == None:
