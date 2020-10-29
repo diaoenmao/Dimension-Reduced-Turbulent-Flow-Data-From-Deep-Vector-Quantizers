@@ -54,6 +54,7 @@ def runExperiment():
     dataset['test'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
     process_dataset(dataset)
     ae = eval('models.{}().to(cfg["device"])'.format(cfg['ae_name']))
+    _, ae, _, _, _ = resume(ae, cfg['ae_tag'], load_tag='best')
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     optimizer = make_optimizer(model)
     scheduler = make_scheduler(optimizer)

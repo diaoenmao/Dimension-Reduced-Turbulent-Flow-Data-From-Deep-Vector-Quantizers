@@ -50,6 +50,7 @@ def runExperiment():
     dataset['test'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
     process_dataset(dataset)
     ae = eval('models.{}().to(cfg["device"])'.format(cfg['ae_name']))
+    _, ae, _, _, _ = resume(ae, cfg['ae_tag'], load_tag='best')
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     last_epoch, model, _, _, _ = resume(model, cfg['model_tag'], load_tag='best')
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
