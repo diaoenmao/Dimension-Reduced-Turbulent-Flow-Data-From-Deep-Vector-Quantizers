@@ -7,7 +7,7 @@ import time
 import torch
 import torch.backends.cudnn as cudnn
 from config import cfg
-from data import BatchDataset
+from data import BatchDataset, fetch_dataset, make_data_loader
 from metrics import Metric
 from utils import save, load, to_device, process_control, process_dataset, make_optimizer, make_scheduler, resume
 from logger import Logger
@@ -27,9 +27,10 @@ if args['control_name']:
 cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']]) if 'control' in cfg else ''
 cfg['pivot_metric'] = 'Loss'
 cfg['pivot'] = float('inf')
-cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss']}
+cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss', 'MSE']}
 cfg['ae_name'] = 'vqvae'
 cfg['model_name'] = 'transformer'
+
 
 def main():
     process_control()
@@ -52,6 +53,7 @@ def runExperiment():
     dataset['train'] = load('./output/code/train_{}.pt'.format(cfg['ae_tag']))
     dataset['test'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
     process_dataset(dataset)
+    ae = eval('models.{}().to(cfg["device"])'.format(cfg['ae_name']))
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     optimizer = make_optimizer(model)
     scheduler = make_scheduler(optimizer)
@@ -73,7 +75,7 @@ def runExperiment():
     for epoch in range(last_epoch, cfg['num_epochs'] + 1):
         logger.safe(True)
         train(dataset['train'], model, optimizer, logger, epoch)
-        test(dataset['test'], model, logger, epoch)
+        test(dataset['test'], model, ae, logger, epoch)
         if cfg['scheduler_name'] == 'ReduceLROnPlateau':
             scheduler.step(metrics=logger.mean['train/{}'.format(cfg['pivot_metric'])])
         else:
@@ -125,7 +127,7 @@ def train(dataset, model, optimizer, logger, epoch):
     return
 
 
-def test(dataset, model, logger, epoch):
+def test(dataset, model, ae, logger, epoch):
     with torch.no_grad():
         metric = Metric()
         model.train(False)
@@ -134,6 +136,8 @@ def test(dataset, model, logger, epoch):
             input_size = input['code'].size(0)
             input = to_device(input, cfg['device'])
             output = model(input)
+            input['uvw'] = ae.decode_code(input['ncode'])
+            output['uvw'] = ae.decode_code(output['code'])
             output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
             logger.append(evaluation, 'test', input_size)

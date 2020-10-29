@@ -118,9 +118,9 @@ def process_control():
                           'dropout': 0.2}
     cfg['conv_lstm'] = {'output_size': 16, 'num_layers': 4, 'embedding_size': 16}
     cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
+    cfg['data_shape'] = [3, 128, 128, 128]
     if cfg['data_name'] in ['Turb']:
         if cfg['model_name'] in ['vqvae']:
-            cfg['data_shape'] = [3, 128, 128, 128]
             cfg['batch_size'] = {'train': 1, 'test': 1}
             cfg['num_epochs'] = 200
             cfg['optimizer_name'] = 'Adam'

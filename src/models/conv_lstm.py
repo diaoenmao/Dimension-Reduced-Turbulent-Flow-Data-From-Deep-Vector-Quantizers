@@ -143,6 +143,7 @@ class ConvLSTMCell(nn.Module):
         x = hx[-1]
         output['score'] = self.classifier(x)
         output['loss'] = F.cross_entropy(output['score'], input['ncode'])
+        output['code'] = output['score'].topk(1, 1, True, True)[1][:, 0]
         self.free_hidden()
         return output
 

@@ -74,10 +74,10 @@ class MultiheadAttention(nn.Module):
             .reshape(batch_size, seq_len, H, W, D, out_dim)
 
     def _reshape_to_conv3d(self, x):
-        return x.view(-1, *x.size()[2:]).permute(0, 4, 1, 2, 3)
+        return x.reshape(-1, *x.size()[2:]).permute(0, 4, 1, 2, 3)
 
     def _reshape_from_conv3d(self, x, N):
-        return x.permute(0, 2, 3, 4, 1).view(N, -1, *x.size()[2:], x.size(1))
+        return x.permute(0, 2, 3, 4, 1).reshape(N, -1, *x.size()[2:], x.size(1))
 
     def forward(self, q, k, v, mask=None):
         N, _, H, W, D, _ = q.size()
@@ -165,10 +165,10 @@ class Transformer(nn.Module):
         src = self.transformer_embedding(src)
         src = self.transformer_encoder(src, self.src_mask)
         out = self.decoder(src)
-        out = out.permute(0, 5, 1, 2, 3, 4)
+        out = out.permute(0, 5, 1, 2, 3, 4)[:, :, -1]
         output['score'] = out
-        output['loss'] = F.cross_entropy(output['score'],
-                                         torch.cat([input['code'], input['ncode'].unsqueeze(1)], dim=1))
+        output['code'] = output['score'].topk(1, 1, True, True)[1][:, 0]
+        output['loss'] = F.cross_entropy(output['score'], input['ncode'])
         return output
 
 
