@@ -5,7 +5,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import models
 from config import cfg
-from data import BatchDataset
+from data import BatchDataset, fetch_dataset
 from metrics import Metric
 from utils import save, load, to_device, process_control, process_dataset, resume, vis
 from logger import Logger
@@ -40,7 +40,7 @@ def main():
         runExperiment()
     return
 
-
+"""
 def runExperiment():
     seed = int(cfg['model_tag'].split('_')[0])
     torch.manual_seed(seed)
@@ -63,11 +63,11 @@ def runExperiment():
     save_result = {'cfg': cfg, 'epoch': last_epoch, 'logger': {'train': train_logger, 'test': test_logger}}
     save(save_result, './output/result/{}.pt'.format(cfg['model_tag']))
     return
-
-
+    
 def test(dataset, model, ae, logger, epoch):
     with torch.no_grad():
         metric = Metric()
+        ae.train(False)
         model.train(False)
         dataset = BatchDataset(dataset, cfg['bptt'])
         for i, input in enumerate(dataset):
@@ -78,6 +78,63 @@ def test(dataset, model, ae, logger, epoch):
             output['uvw'] = ae.decode_code(output['code'])
             input['duvw'] = models.spectral_derivative_3d(input['uvw'])
             output['duvw'] = models.spectral_derivative_3d(output['uvw'])
+            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
+            evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
+            logger.append(evaluation, 'test', input_size)
+        info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
+        logger.append(info, 'test', mean=False)
+        logger.write('test', cfg['metric_name']['test'])
+        vis(input, output, './output/vis')
+    return    
+"""
+def runExperiment():
+    seed = int(cfg['model_tag'].split('_')[0])
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    dataset = fetch_dataset(cfg['data_name'], cfg['subset'])    
+    
+    ae = eval('models.{}().to(cfg["device"])'.format(cfg['ae_name']))
+    _, ae, _, _, _ = resume(ae, cfg['ae_tag'], load_tag='best')
+    model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
+    last_epoch, model, _, _, _ = resume(model, cfg['model_tag'], load_tag='best')
+    current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
+    logger_path = 'output/runs/test_{}_{}'.format(cfg['model_tag'], current_time)
+    test_logger = Logger(logger_path)
+    test_logger.safe(True)
+    test(dataset['test'], model, ae, test_logger, last_epoch)
+    test_logger.safe(False)
+    _, _, _, _, train_logger = resume(model, cfg['model_tag'], load_tag='best')
+    save_result = {'cfg': cfg, 'epoch': last_epoch, 'logger': {'train': train_logger, 'test': test_logger}}
+    save(save_result, './output/result/{}.pt'.format(cfg['model_tag']))
+    return
+
+def test(dataset, model, ae, logger, epoch):
+    with torch.no_grad():
+        metric = Metric()
+        ae.train(False)
+        model.train(False)
+        
+        input = [dataset[j] for j in range(cfg['bptt'])]
+        input = to_device(input, cfg['device'])
+        initial_seq = [input[j]['uvw'].unsqueeze(0) for j in range(len(input))]
+        code_data_i = []                
+        for item in initial_seq:
+            _, _, code_i = ae.encode(item)
+            code_data_i.append(code_i)                                
+        code = torch.stack(code_data_i, dim=1)                
+        for i in range(cfg['bptt'],len(dataset)):
+            input = dataset[i] # target
+            input_size = input['uvw'].size(0)
+            input = to_device(input, cfg['device'])
+            input['uvw'], input['duvw'] = input['uvw'].unsqueeze(0), input['duvw'].unsqueeze(0) # add batch dimension
+            input['code'] = code
+            _, _, input['ncode'] = ae.encode(input['uvw'])
+            output = model(input)            
+            output['uvw'] = ae.decode_code(output['code'])            
+            output['duvw'] = models.spectral_derivative_3d(output['uvw'])
+            # update input code by shifting the current code (code[:-1]=code[1:]) and using the new predicted code                        
+            code[:,:-1] = code[:,1:].clone()
+            code[:,-1] = output['code']                                   
             output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
             logger.append(evaluation, 'test', input_size)
