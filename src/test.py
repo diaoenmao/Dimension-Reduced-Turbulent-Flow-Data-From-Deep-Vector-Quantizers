@@ -172,3 +172,17 @@ from logger import Logger
 #         error = (myduvw - duvw).abs().mean([0,-3,-2,-1])
 #         print(error)
 #         exit()
+
+
+# if __name__ == '__main__':
+#     data_name = 'Turb'
+#     cfg['subset'] = 'uvw'
+#     cfg['batch_size']['train'] = 1
+#     dataset = fetch_dataset(data_name, cfg['subset'])
+#     process_dataset(dataset['train'])
+#     data_loader = make_data_loader(dataset)
+#     for i, input in enumerate(data_loader['train']):
+#         input = collate(input)
+#         input_size = input['uvw'].size(0)
+#         print(input['uvw'].size(), input['duvw'].size())
+#         exit()

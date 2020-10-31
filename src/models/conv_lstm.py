@@ -112,10 +112,11 @@ class ConvLSTMCell(nn.Module):
         if self.hidden is None:
             self.hidden = hidden
         output = {}
-        x = input['code']
+        x = torch.cat([input['code'], input['ncode'][:, :-1]], dim=1)
         x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
+            y = [None for _ in range(x.size(1))]
             for j in range(x.size(1)):
                 gates = self.cell[i]['in'](x[:, j])
                 if hidden is None:
@@ -140,8 +141,13 @@ class ConvLSTMCell(nn.Module):
                 outgate = torch.sigmoid(outgate)
                 cx[i] = (forgetgate * cx[i]) + (ingate * cellgate)
                 hx[i] = outgate * self.cell[i]['activation'][1](cx[i])
-        x = hx[-1]
-        output['score'] = self.classifier(x)
+                y[j] = hx[i]
+            x = torch.stack(y, dim=1)
+        y = [None for _ in range(x.size(1))]
+        for j in range(x.size(1)):
+            y[j] = self.classifier(x[:, j])
+        x = torch.stack(y, dim=1)
+        output['score'] = x.permute(0, 2, 1, 3, 4, 5)[:, :, -cfg['bptt']:]
         output['loss'] = F.cross_entropy(output['score'], input['ncode'])
         output['code'] = output['score'].topk(1, 1, True, True)[1][:, 0]
         self.free_hidden()

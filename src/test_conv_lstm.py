@@ -5,7 +5,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import models
 from config import cfg
-from data import BatchDataset, fetch_dataset
+from data import BatchDataset
 from metrics import Metric
 from utils import save, load, to_device, process_control, process_dataset, resume, vis
 from logger import Logger
@@ -27,7 +27,6 @@ cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss', 'MSE', 'D_MSE', 'Physi
 cfg['ae_name'] = 'vqvae'
 cfg['model_name'] = 'conv_lstm'
 
-Use_cycling = False
 
 def main():
     process_control()
@@ -41,11 +40,14 @@ def main():
         runExperiment()
     return
 
+
 def runExperiment():
     seed = int(cfg['model_tag'].split('_')[0])
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    dataset = fetch_dataset(cfg['data_name'], cfg['subset'])
+    uvw_dataset = fetch_dataset(cfg['data_name'], cfg['subset'])
+    code_dataset = {}
+    code_dataset['test'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
     ae = eval('models.{}().to(cfg["device"])'.format(cfg['ae_name']))
     _, ae, _, _, _ = resume(ae, cfg['ae_tag'], load_tag='best')
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
@@ -54,53 +56,37 @@ def runExperiment():
     logger_path = 'output/runs/test_{}_{}'.format(cfg['model_tag'], current_time)
     test_logger = Logger(logger_path)
     test_logger.safe(True)
-    if Use_cycling:
-        test_cycle(dataset['test'], model, ae, test_logger, last_epoch)
-    else:
-        test(dataset['test'], model, ae, test_logger, last_epoch)
+    test(uvw_dataset['test'], code_dataset['test'], model, ae, test_logger, last_epoch)
     test_logger.safe(False)
     _, _, _, _, train_logger = resume(model, cfg['model_tag'], load_tag='best')
     save_result = {'cfg': cfg, 'epoch': last_epoch, 'logger': {'train': train_logger, 'test': test_logger}}
     save(save_result, './output/result/{}.pt'.format(cfg['model_tag']))
     return
 
-def test(dataset, model, ae, logger, epoch):
+
+def test(uvw_dataset, code_dataset, model, ae, logger, epoch):
     with torch.no_grad():
         metric = Metric()
         ae.train(False)
         model.train(False)
-        Fast = False # true is memory consuming
-        for i in range(len(dataset)-cfg['bptt']-1):
-            
-            # encode the input sequence 
-            input_seq = [dataset[j] for j in range(i, i + cfg['bptt'])]
-            input_seq = to_device(input_seq, cfg['device'])
-            input_seq = [input_seq[j]['uvw'].unsqueeze(0) for j in range(len(input_seq))] 
-            if Fast:
-                input_seq = torch.cat(input_seq, dim=0)
-                _, _, code = ae.encode(input_seq)
-                code = code.unsqueeze(0)
-            else:                
-                code_data_i = []                
-                for item in input_seq:
-                    _, _, code_i = ae.encode(item)
-                    code_data_i.append(code_i)                                
-                code = torch.stack(code_data_i, dim=1)             
-            
-            # encode the target 
-            input = dataset[i + cfg['bptt']] # target
-            input_size = input['uvw'].size(0)
+        for i in range(0, len(uvw_dataset) - 2 * cfg['bptt'], 1):
+            input_uvw, input_duvw = [], []
+            for j in range(i, i + 2 * cfg['bptt']):
+                input_uvw.append(uvw_dataset[j]['uvw'])
+                input_duvw.append(uvw_dataset[j]['duvw'])
+            code = code_dataset[i: i + 2 * cfg['bptt']]
+            input_uvw = torch.stack(input_uvw, dim=0)
+            input_duvw = torch.stack(input_duvw, dim=0)
+            code = code.unsqueeze(0)
+            input = {'uvw': input_uvw[cfg['bptt']:], 'duvw': input_duvw[cfg['bptt']:],
+                     'code': code[:, :cfg['bptt']], 'ncode': code[:, cfg['bptt']:]}
             input = to_device(input, cfg['device'])
-            input['uvw'], input['duvw'] = input['uvw'].unsqueeze(0), input['duvw'].unsqueeze(0) # add batch dimension
-            input['code'] = code
-            _, _, input['ncode'] = ae.encode(input['uvw'])
-            output = model(input)            
-            output['uvw'] = ae.decode_code(output['code'])            
+            output = model(input)
+            output['uvw'] = ae.decode_code(output['code'].view(-1, *output['code'].size()[2:]))
             output['duvw'] = models.spectral_derivative_3d(output['uvw'])
             output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
-            print([(key,evaluation[key]) for key in evaluation])
-            logger.append(evaluation, 'test', input_size)
+            logger.append(evaluation, 'test', 1)
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
@@ -108,44 +94,5 @@ def test(dataset, model, ae, logger, epoch):
     return
 
 
-def test_cycle(dataset, model, ae, logger, epoch):
-    with torch.no_grad():
-        metric = Metric()
-        ae.train(False)
-        model.train(False)
-        
-        input = [dataset[j] for j in range(cfg['bptt'])]
-        input = to_device(input, cfg['device'])
-        initial_seq = [input[j]['uvw'].unsqueeze(0) for j in range(len(input))]
-        code_data_i = []                
-        for item in initial_seq:
-            _, _, code_i = ae.encode(item)
-            code_data_i.append(code_i)                                
-        code = torch.stack(code_data_i, dim=1)                
-        for i in range(cfg['bptt'],len(dataset)):
-            input = dataset[i] # target
-            input_size = input['uvw'].size(0)
-            input = to_device(input, cfg['device'])
-            input['uvw'], input['duvw'] = input['uvw'].unsqueeze(0), input['duvw'].unsqueeze(0) # add batch dimension
-            input['code'] = code
-            _, _, input['ncode'] = ae.encode(input['uvw'])
-            output = model(input)            
-            output['uvw'] = ae.decode_code(output['code'])            
-            output['duvw'] = models.spectral_derivative_3d(output['uvw'])
-            # update input code by shifting the current code (code[:-1]=code[1:]) and using the new predicted code                        
-            code[:,:-1] = code[:,1:].clone()
-            code[:,-1] = output['code']                                   
-            output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
-            evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
-            logger.append(evaluation, 'test', input_size)
-            vis(input, output, './output/vis/prediction{}'.format(i+1-cfg['bptt']))
-            print([(key,evaluation[key]) for key in evaluation])
-            if i==2*cfg['bptt']:
-                break
-        info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
-        logger.append(info, 'test', mean=False)
-        logger.write('test', cfg['metric_name']['test'])
-        #vis(input, output, './output/vis')
-    return
 if __name__ == "__main__":
     main()

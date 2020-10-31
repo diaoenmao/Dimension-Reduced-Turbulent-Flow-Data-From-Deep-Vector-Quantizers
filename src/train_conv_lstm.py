@@ -137,8 +137,8 @@ def test(dataset, model, ae, logger, epoch):
             input_size = input['code'].size(0)
             input = to_device(input, cfg['device'])
             output = model(input)
-            input['uvw'] = ae.decode_code(input['ncode'])
-            output['uvw'] = ae.decode_code(output['code'])
+            input['uvw'] = ae.decode_code(input['ncode'].view(-1, *input['ncode'].size()[2:]))
+            output['uvw'] = ae.decode_code(output['code'].view(-1, *input['code'].size()[2:]))
             output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
             logger.append(evaluation, 'test', input_size)

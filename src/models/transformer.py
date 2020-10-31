@@ -10,7 +10,7 @@ from config import cfg
 class PositionalEmbedding(nn.Module):
     def __init__(self, embedding_size):
         super().__init__()
-        self.positional_embedding = nn.Embedding(cfg['bptt'] + 1, embedding_size)
+        self.positional_embedding = nn.Embedding(2 * cfg['bptt'], embedding_size)
 
     def forward(self, x):
         N, S, H, W, D = x.size()
@@ -145,7 +145,7 @@ class Transformer(nn.Module):
     def __init__(self, num_embedding, embedding_size, num_heads, hidden_size, num_layers, dropout):
         super().__init__()
         self.num_embedding = num_embedding
-        self.transformer_embedding = TransformerEmbedding(num_embedding + 1, embedding_size, dropout)
+        self.transformer_embedding = TransformerEmbedding(num_embedding, embedding_size, dropout)
         encoder_layers = TransformerEncoderLayer(embedding_size, num_heads, hidden_size, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, num_layers)
         self.decoder = Decoder(num_embedding, embedding_size)
@@ -153,22 +153,20 @@ class Transformer(nn.Module):
 
     def _generate_square_subsequent_mask(self, sz):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf'))
+        mask[:, :sz // 2] = True
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).to(cfg['device'])
         return mask
 
     def forward(self, input):
         output = {}
-        src = input['code']
-        mask = torch.tensor([self.num_embedding], dtype=torch.long, device=src.device).expand(src.size(0),
-                                                                                              1, *src.size()[-3:])
-        src = torch.cat([src, mask], dim=1)
+        src = torch.cat([input['code'], input['ncode'][:,:-1]], dim=1)
+        self.src_mask = self._generate_square_subsequent_mask(src.size(1))
         src = self.transformer_embedding(src)
         src = self.transformer_encoder(src, self.src_mask)
         out = self.decoder(src)
-        out = out.permute(0, 5, 1, 2, 3, 4)[:, :, -1]
-        output['score'] = out
-        output['code'] = output['score'].topk(1, 1, True, True)[1][:, 0]
+        output['score'] = out.permute(0, 5, 1, 2, 3, 4)[:, :, -cfg['bptt']:]
         output['loss'] = F.cross_entropy(output['score'], input['ncode'])
+        output['code'] = output['score'].topk(1, 1, True, True)[1][:, 0]
         return output
 
 

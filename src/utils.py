@@ -100,11 +100,7 @@ def recur(fn, input, *args):
 def process_dataset(dataset):
     if cfg['model_name'] in ['transformer', 'conv_lstm']:
         for split in dataset:
-            if isinstance(dataset[split], dict):
-                for item in dataset[split]:
-                    dataset[split][item] = batchify(dataset[split][item], cfg['batch_size'][split])
-            else:
-                dataset[split] = batchify(dataset[split], cfg['batch_size'][split])
+            dataset[split] = batchify(dataset[split], cfg['batch_size'][split])
     return
 
 
