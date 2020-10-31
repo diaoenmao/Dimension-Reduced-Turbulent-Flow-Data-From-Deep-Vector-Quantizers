@@ -75,11 +75,12 @@ class ConvCell(nn.Module):
 class ConvLSTMCell(nn.Module):
     def __init__(self, cell_info):
         super(ConvLSTMCell, self).__init__()
+        self.num_embedding = cell_info['num_embedding']
         self.cell_info = cell_info
         self.cell = self.make_cell()
         self.hidden = None
-        self.embedding = nn.Embedding(cell_info['num_embedding'], cell_info['embedding_size'])
-        self.classifier = nn.Conv3d(cell_info['output_size'], cell_info['num_embedding'], 3, 1, 1)
+        self.embedding = nn.Embedding(cell_info['num_embedding'] + 1, cell_info['embedding_size'])
+        self.classifier = nn.Linear(cell_info['output_size'], cell_info['num_embedding'])
 
     def make_cell(self):
         cell_info = copy.deepcopy(self.cell_info)
@@ -112,7 +113,10 @@ class ConvLSTMCell(nn.Module):
         if self.hidden is None:
             self.hidden = hidden
         output = {}
-        x = torch.cat([input['code'], input['ncode'][:, :-1]], dim=1)
+        x = input['code']
+        mask = torch.tensor([self.num_embedding], dtype=torch.long,
+                            device=x.device).expand(x.size(0), cfg['bptt'], *x.size()[-3:])
+        x = torch.cat([x, mask], dim=1)
         x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
         for i in range(len(self.cell)):
@@ -143,11 +147,8 @@ class ConvLSTMCell(nn.Module):
                 hx[i] = outgate * self.cell[i]['activation'][1](cx[i])
                 y[j] = hx[i]
             x = torch.stack(y, dim=1)
-        y = [None for _ in range(x.size(1))]
-        for j in range(x.size(1)):
-            y[j] = self.classifier(x[:, j])
-        x = torch.stack(y, dim=1)
-        output['score'] = x.permute(0, 2, 1, 3, 4, 5)[:, :, -cfg['bptt']:]
+        x = self.classifier(x.permute(0, 1, 3, 4, 5, 2))
+        output['score'] = x.permute(0, 5, 1, 2, 3, 4)[:, :, -cfg['bptt']:]
         output['loss'] = F.cross_entropy(output['score'], input['ncode'])
         output['code'] = output['score'].topk(1, 1, True, True)[1][:, 0]
         self.free_hidden()
