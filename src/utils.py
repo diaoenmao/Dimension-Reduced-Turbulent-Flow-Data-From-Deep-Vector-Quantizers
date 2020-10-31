@@ -134,7 +134,7 @@ def process_control():
             cfg['lr'] = 1e-3
             cfg['weight_decay'] = 5e-4
             cfg['scheduler_name'] = 'ReduceLROnPlateau'
-            cfg['bptt'] = 4
+            cfg['bptt'] = 1
         elif cfg['model_name'] in ['transformer']:
             cfg['batch_size'] = {'train': 1, 'test': 1}
             cfg['num_epochs'] = 250
