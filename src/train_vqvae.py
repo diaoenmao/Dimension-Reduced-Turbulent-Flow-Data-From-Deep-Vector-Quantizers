@@ -28,7 +28,7 @@ if args['control_name']:
 cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']]) if 'control' in cfg else ''
 cfg['pivot_metric'] = 'MSE'
 cfg['pivot'] = float('inf')
-cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss', 'MSE', 'D_MSE', 'Physics']}
+cfg['metric_name'] = {'train': ['Loss', 'MSE', 'D_MSE', 'Physics'], 'test': ['Loss', 'MSE', 'D_MSE', 'Physics']}
 cfg['model_name'] = 'vqvae'
 
 

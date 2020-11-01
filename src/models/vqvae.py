@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from config import cfg
 from modules import VectorQuantization
-from .utils import init_param, spectral_derivative_3d, physics
+from .utils import init_param, spectral_derivative_3d, physics, weighted_mse_loss
 
 
 class ResBlock(nn.Module):
@@ -111,7 +111,7 @@ class Decoder(nn.Module):
 
 class VQVAE(nn.Module):
     def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32, embedding_size=64,
-                 num_embedding=512, d_mode='exact', d_commit=None, vq_commit=0.25):
+                 num_embedding=512, d_mode='exact', d_commit=None, vq_commit=0.25, loss_power_vg=2):
         super().__init__()
         self.encoder = Encoder(input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
         self.encoder_conv = nn.Conv3d(hidden_size, embedding_size, 1, 1, 0)
@@ -119,6 +119,7 @@ class VQVAE(nn.Module):
         self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
         self.d_mode = d_mode
         self.d_commit = d_commit
+        self.loss_power = loss_power_vg
 
     def encode(self, input):
         x = input
@@ -146,9 +147,9 @@ class VQVAE(nn.Module):
         output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + diff
         for i in range(len(self.d_mode)):
             if self.d_mode[i] == 'exact':
-                output['loss'] += self.d_commit[i] * F.mse_loss(output['duvw'], input['duvw'])
+                output['loss'] += self.d_commit[i] * weighted_mse_loss(output['duvw'], input['duvw'])
             elif self.d_mode[i] == 'physics':
-                output['loss'] += self.d_commit[i] * physics(output['duvw'])
+                output['loss'] += self.d_commit[i] * physics(output['duvw'], input['duvw'])
             else:
                 raise ValueError('Not valid d_mode')
         return output

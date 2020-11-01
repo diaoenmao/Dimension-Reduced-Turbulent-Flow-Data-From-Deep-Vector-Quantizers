@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from config import cfg
 from utils import recur
-from models.utils import physics
+from models.utils import physics, weighted_mse_loss
 
 
 def MSE(output, target):
@@ -11,8 +11,8 @@ def MSE(output, target):
     return mse
 
 
-def Physics(output):
-    phy = physics(output).item()
+def Physics(output, target):
+    phy = physics(output, target).item()
     return phy
 
 
@@ -23,7 +23,8 @@ class Metric(object):
         self.metric['MSE'] = lambda input, output: recur(MSE, output[cfg['subset']], input[cfg['subset']])
         self.metric['D_MSE'] = lambda input, output: recur(MSE, output['d{}'.format(cfg['subset'])],
                                                            input['d{}'.format(cfg['subset'])])
-        self.metric['Physics'] = lambda input, output: recur(Physics, output['d{}'.format(cfg['subset'])])
+        self.metric['Physics'] = lambda input, output: recur(Physics, output['d{}'.format(cfg['subset'])],
+                                                            input['d{}'.format(cfg['subset'])])
 
     def evaluate(self, metric_names, input, output):
         evaluation = {}

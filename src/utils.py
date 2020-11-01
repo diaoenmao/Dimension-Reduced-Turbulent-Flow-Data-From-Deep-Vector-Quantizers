@@ -112,7 +112,7 @@ def process_control():
                     'num_embedding': 512, 'vq_commit': 0.25}
     cfg['transformer'] = {'embedding_size': 32, 'num_heads': 2, 'hidden_size': 32, 'num_layers': 4,
                           'dropout': 0.2}
-    cfg['conv_lstm'] = {'output_size': 32, 'num_layers': 4, 'embedding_size': 32}
+    cfg['conv_lstm'] = {'output_size': 16, 'num_layers': 4, 'embedding_size': 32}
     cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
     cfg['data_shape'] = [3, 128, 128, 128]
     if cfg['data_name'] in ['Turb']:

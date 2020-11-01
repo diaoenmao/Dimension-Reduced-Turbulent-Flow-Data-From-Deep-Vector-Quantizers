@@ -79,7 +79,7 @@ class ConvLSTMCell(nn.Module):
         self.cell_info = cell_info
         self.cell = self.make_cell()
         self.hidden = None
-        self.embedding = nn.Embedding(cell_info['num_embedding'] + 1, cell_info['embedding_size'])
+        self.embedding = nn.Embedding(cell_info['num_embedding'] +1, cell_info['embedding_size'])
         self.classifier = nn.Linear(cell_info['output_size'], cell_info['num_embedding'])
 
     def make_cell(self):
