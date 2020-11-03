@@ -132,6 +132,7 @@ def test(dataset, model, ae, logger, epoch):
     with torch.no_grad():
         metric = Metric()
         model.train(False)
+        ae.train(False)
         dataset = BatchDataset(dataset, cfg['bptt'])
         for i, input in enumerate(dataset):
             input_size = input['code'].size(0)

@@ -5,7 +5,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import models
 from config import cfg
-from data import BatchDataset
+from data import BatchDataset, fetch_dataset
 from metrics import Metric
 from utils import save, load, to_device, process_control, process_dataset, resume, vis
 from logger import Logger
@@ -86,11 +86,15 @@ def test(uvw_dataset, code_dataset, model, ae, logger, epoch):
             output['duvw'] = models.spectral_derivative_3d(output['uvw'])
             output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
-            logger.append(evaluation, 'test', 1)
+            logger.append(evaluation, 'test', 1)                        
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
-        vis(input, output, './output/vis')
+        
+        for j in range(output['uvw'].size(0)):
+            vis_input = {'uvw': input['uvw'][j].unsqueeze(0), 'duvw': input['duvw'][j].unsqueeze(0)}
+            vis_output = {'uvw': output['uvw'][j].unsqueeze(0), 'duvw': output['duvw'][j].unsqueeze(0)}
+            vis(vis_input, vis_output, './output/vis/p_{}'.format(j))
     return
 
 

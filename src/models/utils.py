@@ -63,8 +63,8 @@ def physics(A_model, A_target):
         S_ijS_ij_m[i] = S_ijS_ij.mean()
         R_ijR_ij_m[i] = R_ijR_ij.mean()
         
-        S=S.permute(0,3,4,5,1,2).view(-1,3,3)
-        R=R.permute(0,3,4,5,1,2).view(-1,3,3)         
+        S=S.permute(0,3,4,5,1,2).reshape(-1,3,3)
+        R=R.permute(0,3,4,5,1,2).reshape(-1,3,3)         
         SijSkjSji = torch.zeros(1)#torch.sum(torch.matmul(S, S) * S, axis=(1, 2))
         Omega= torch.empty((*R.size()[:-1],1), device =R.device)
         Omega[:, 0, 0]=2*R[:, 2, 1]
