@@ -69,24 +69,24 @@ def test(uvw_dataset, code_dataset, model, ae, logger, epoch):
         metric = Metric()
         ae.train(False)
         model.train(False)
-        for i in range(0, len(uvw_dataset) - 2 * cfg['bptt'], 1):
+        for i in range(0, len(uvw_dataset) - (cfg['bptt'] + cfg['pred_length']), 1):
             input_uvw, input_duvw = [], []
-            for j in range(i, i + 2 * cfg['bptt']):
+            for j in range(i, i + cfg['bptt'] + cfg['pred_length']):
                 input_uvw.append(uvw_dataset[j]['uvw'])
                 input_duvw.append(uvw_dataset[j]['duvw'])
-            code = code_dataset[i: i + 2 * cfg['bptt']]
+            code = code_dataset[i: i + cfg['bptt'] + cfg['pred_length']]
             input_uvw = torch.stack(input_uvw, dim=0)
             input_duvw = torch.stack(input_duvw, dim=0)
-            code = code.unsqueeze(0)
-            input = {'uvw': input_uvw[cfg['bptt']:], 'duvw': input_duvw[cfg['bptt']:],
-                     'code': code[:, :cfg['bptt']], 'ncode': code[:, cfg['bptt']:]}
+            code = code.unsqueeze(0)            
+            input = {'uvw': input_uvw[-cfg['pred_length']:], 'duvw': input_duvw[-cfg['pred_length']:],
+                     'code': code[:, :cfg['bptt']], 'ncode': code[:, -cfg['pred_length']:]}
             input = to_device(input, cfg['device'])
             output = model(input)
             output['uvw'] = ae.decode_code(output['code'].view(-1, *output['code'].size()[2:]))
             output['duvw'] = models.spectral_derivative_3d(output['uvw'])
             output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
             evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
-            logger.append(evaluation, 'test', 1)
+            logger.append(evaluation, 'test', 1)                        
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])

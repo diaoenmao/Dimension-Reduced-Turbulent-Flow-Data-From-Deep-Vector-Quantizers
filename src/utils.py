@@ -131,14 +131,16 @@ def process_control():
             cfg['weight_decay'] = 5e-4
             cfg['scheduler_name'] = 'ReduceLROnPlateau'
             cfg['bptt'] = 3
+            cfg['pred_length'] = 1
         elif cfg['model_name'] in ['transformer']:
             cfg['batch_size'] = {'train': 1, 'test': 1}
-            cfg['num_epochs'] = 250
+            cfg['num_epochs'] = 350
             cfg['optimizer_name'] = 'Adam'
             cfg['lr'] = 1e-3
             cfg['weight_decay'] = 5e-4
             cfg['scheduler_name'] = 'ReduceLROnPlateau'
             cfg['bptt'] = 3
+            cfg['pred_length'] = 2
         else:
             raise ValueError('Not valid model name')
     return

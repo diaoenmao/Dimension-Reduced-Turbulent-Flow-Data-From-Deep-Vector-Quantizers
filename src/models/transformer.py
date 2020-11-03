@@ -177,11 +177,11 @@ class Transformer(nn.Module):
         output = {}
         src = input['code']
         mask = torch.tensor([self.num_embedding], dtype=torch.long,
-                            device=src.device).expand(src.size(0), cfg['bptt'], *src.size()[-3:])
+                            device=src.device).expand(src.size(0), cfg['pred_length'], *src.size()[-3:])
         src = torch.cat([src, mask], dim=1)
         src = self.transformer_encoder(src, self.src_mask)
         out = self.transformer_decoder(src)
-        output['score'] = out.permute(0, 5, 1, 2, 3, 4)[:, :, -cfg['bptt']:]
+        output['score'] = out.permute(0, 5, 1, 2, 3, 4)[:, :, -cfg['pred_length']:]
         output['loss'] = F.cross_entropy(output['score'], input['ncode'])
         output['code'] = output['score'].topk(1, 1, True, True)[1][:, 0]
         return output

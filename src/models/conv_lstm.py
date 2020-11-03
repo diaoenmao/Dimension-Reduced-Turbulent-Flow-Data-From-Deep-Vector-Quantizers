@@ -115,7 +115,7 @@ class ConvLSTMCell(nn.Module):
         output = {}
         x = input['code']
         mask = torch.tensor([self.num_embedding], dtype=torch.long,
-                            device=x.device).expand(x.size(0), cfg['bptt'], *x.size()[-3:])
+                            device=x.device).expand(x.size(0), cfg['pred_length'], *x.size()[-3:])
         x = torch.cat([x, mask], dim=1)
         x = self.embedding(x).permute(0, 1, 5, 2, 3, 4)
         hx, cx = [None for _ in range(len(self.cell))], [None for _ in range(len(self.cell))]
@@ -148,7 +148,7 @@ class ConvLSTMCell(nn.Module):
                 y[j] = hx[i]
             x = torch.stack(y, dim=1)
         x = self.classifier(x.permute(0, 1, 3, 4, 5, 2))
-        output['score'] = x.permute(0, 5, 1, 2, 3, 4)[:, :, -cfg['bptt']:]
+        output['score'] = x.permute(0, 5, 1, 2, 3, 4)[:, :, -cfg['pred_length']:]
         output['loss'] = F.cross_entropy(output['score'], input['ncode'])
         output['code'] = output['score'].topk(1, 1, True, True)[1][:, 0]
         self.free_hidden()

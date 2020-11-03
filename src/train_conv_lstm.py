@@ -101,7 +101,7 @@ def train(dataset, model, optimizer, logger, epoch):
     metric = Metric()
     model.train(True)
     start_time = time.time()
-    dataset = BatchDataset(dataset, cfg['bptt'])
+    dataset = BatchDataset(dataset, cfg['bptt'], cfg['pred_length'])
     for i, input in enumerate(dataset):
         input_size = input['code'].size(0)
         input = to_device(input, cfg['device'])
@@ -133,7 +133,7 @@ def test(dataset, model, ae, logger, epoch):
         metric = Metric()
         model.train(False)
         ae.train(False)
-        dataset = BatchDataset(dataset, cfg['bptt'])
+        dataset = BatchDataset(dataset, cfg['bptt'], cfg['pred_length'])
         for i, input in enumerate(dataset):
             input_size = input['code'].size(0)
             input = to_device(input, cfg['device'])

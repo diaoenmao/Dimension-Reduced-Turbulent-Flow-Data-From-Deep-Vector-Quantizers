@@ -40,12 +40,13 @@ def make_data_loader(dataset):
 
 
 class BatchDataset(Dataset):
-    def __init__(self, dataset, seq_length):
+    def __init__(self, dataset, seq_length, seq_length_pre):
         super().__init__()
         self.dataset = dataset
         self.seq_length = seq_length
+        self.seq_length_pre = seq_length_pre
         self.S = dataset.size(1)
-        self.idx = list(range(0, self.S - 2 * seq_length, 1))
+        self.idx = list(range(0, self.S - (seq_length + seq_length_pre), 1))
 
     def __len__(self):
         return len(self.idx)
@@ -53,5 +54,5 @@ class BatchDataset(Dataset):
     def __getitem__(self, index):
         seq_length = min(self.seq_length, self.S - 1 - index)
         input = {'code': self.dataset[:, self.idx[index]:self.idx[index] + seq_length],
-                 'ncode': self.dataset[:, self.idx[index] + seq_length:self.idx[index] + 2 * seq_length]}
+                 'ncode': self.dataset[:, self.idx[index] + seq_length:self.idx[index] +  seq_length + self.seq_length_pre]}
         return input
