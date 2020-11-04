@@ -4,7 +4,7 @@ import torch.nn as nn
 
 
 def init_param(m):
-    if isinstance(m, (nn.BatchNorm3d, nn.InstanceNorm3d)):
+    if isinstance(m, (nn.BatchNorm3d)):
         m.weight.data.fill_(1)
         m.bias.data.zero_()
     return m
