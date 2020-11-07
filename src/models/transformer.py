@@ -6,6 +6,9 @@ import torch.nn.functional as F
 from .utils import init_param
 from config import cfg
 
+Normalization = nn.LayerNorm #BatchNorm3d
+Activation = nn.GELU
+
 
 def _reshape_to_conv3d(x):
     return x.reshape(-1, *x.size()[2:]).permute(0, 4, 1, 2, 3)
@@ -97,12 +100,14 @@ class Conv(nn.Module):
         super().__init__()
         self.map_1 = nn.Conv3d(embedding_size, hidden_size, 3, 1, 1)
         self.map_2 = nn.Conv3d(hidden_size, embedding_size, 3, 1, 1)
-
+        self.norm = Normalization(hidden_size)
+        self.activation = Activation()
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         N = x.size()[0]
-        x = self.dropout((_reshape_from_conv3d((self.map_1(_reshape_to_conv3d(x))), N)))
+        x = self.dropout(self.activation(_reshape_from_conv3d(self.norm(self.map_1(_reshape_to_conv3d(x))), N)))
+        #x = self.dropout(self.activation(_reshape_from_conv3d(self.norm(self.map_1(_reshape_to_conv3d(x))), N)))
         x = _reshape_from_conv3d(self.map_2(_reshape_to_conv3d(x)), N)
         return x
 
@@ -110,47 +115,51 @@ class Conv(nn.Module):
 class TransformerEncoderLayer(nn.Module):
     def __init__(self, embedding_size, num_heads, hidden_size, dropout):
         super().__init__()
-        #self.norm_1 = Normalization(embedding_size)
-        #self.norm_2 = Normalization(embedding_size)
+        self.norm_1 = Normalization(embedding_size)
+        self.norm_2 = Normalization(embedding_size)
         self.dropout_1 = nn.Dropout(dropout)
         self.dropout_2 = nn.Dropout(dropout)
         self.mha = MultiheadAttention(embedding_size, num_heads)
         self.conv = Conv(embedding_size, hidden_size, dropout)
-       
 
     def forward(self, src, src_mask=None):
         N = src.size()[0]
-        _src = _reshape_from_conv3d((_reshape_to_conv3d(src)), N)
+        _src = self.norm_1((src))
         _src, _ = self.mha(_src, _src, _src, mask=src_mask)
         src = src + self.dropout_1(_src)
-        _src = _reshape_from_conv3d((_reshape_to_conv3d(src)), N)
+        _src = self.norm_2((src))
         _src = self.conv(_src)
         src = src + self.dropout_2(_src)
         return src
 
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, embedding, encoder_layer, num_layers):
+    def __init__(self, embedding, encoder_layer, num_layers, embedding_size):
         super().__init__()
         self.embedding = embedding
         self.layers = nn.ModuleList([copy.deepcopy(encoder_layer) for i in range(num_layers)])
         self.num_layers = num_layers
+        self.norm = Normalization(embedding_size)
 
     def forward(self, src, src_mask=None):
         x = self.embedding(src)
         for i in range(self.num_layers):
             x = self.layers[i](x, src_mask)
+        x = self.norm(x)
         return x
 
 
 class TransformerDecoder(nn.Module):
     def __init__(self, num_tokens, embedding_size):
         super().__init__()
+        self.conv = nn.Conv3d(embedding_size, embedding_size, 3, 1, 1)
+        self.activation = Activation()
+        self.norm = Normalization(embedding_size)
         self.linear = nn.Linear(embedding_size, num_tokens)
 
     def forward(self, src):
         N = src.size()[0]
-        out = self.linear(_reshape_from_conv3d((_reshape_to_conv3d(src)), N))
+        out = self.linear(self.norm(self.activation(_reshape_from_conv3d(self.conv(_reshape_to_conv3d(src)), N))))
         return out
 
 
@@ -160,7 +169,7 @@ class Transformer(nn.Module):
         self.num_embedding = num_embedding
         embedding = TransformerEmbedding(num_embedding + 1, embedding_size)
         encoder_layer = TransformerEncoderLayer(embedding_size, num_heads, hidden_size, dropout)
-        self.transformer_encoder = TransformerEncoder(embedding, encoder_layer, num_layers)
+        self.transformer_encoder = TransformerEncoder(embedding, encoder_layer, num_layers, embedding_size)
         self.transformer_decoder = TransformerDecoder(num_embedding, embedding_size)
         self.src_mask = None
 
