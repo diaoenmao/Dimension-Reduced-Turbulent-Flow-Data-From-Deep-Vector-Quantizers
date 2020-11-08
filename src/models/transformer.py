@@ -100,14 +100,12 @@ class Conv(nn.Module):
         super().__init__()
         self.map_1 = nn.Conv3d(embedding_size, hidden_size, 3, 1, 1)
         self.map_2 = nn.Conv3d(hidden_size, embedding_size, 3, 1, 1)
-        self.norm = Normalization(hidden_size)
         self.activation = Activation()
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         N = x.size()[0]
-        x = self.dropout(self.activation(_reshape_from_conv3d(self.norm(self.map_1(_reshape_to_conv3d(x))), N)))
-        #x = self.dropout(self.activation(_reshape_from_conv3d(self.norm(self.map_1(_reshape_to_conv3d(x))), N)))
+        x = self.dropout(self.activation(_reshape_from_conv3d((self.map_1(_reshape_to_conv3d(x))), N)))        
         x = _reshape_from_conv3d(self.map_2(_reshape_to_conv3d(x)), N)
         return x
 

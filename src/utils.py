@@ -110,9 +110,9 @@ def process_control():
     cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
     cfg['vqvae'] = {'hidden_size': 128, 'depth': cfg['depth'], 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
                     'num_embedding': 512, 'vq_commit': 0.25}
-    cfg['transformer'] = {'embedding_size': 16, 'num_heads': 2, 'hidden_size': 32, 'num_layers': 2,
+    cfg['transformer'] = {'embedding_size': 2**(7-cfg['depth']), 'num_heads': 2, 'hidden_size': 2**(7-cfg['depth']), 'num_layers': 2,
                           'dropout': 0.2}
-    cfg['conv_lstm'] = {'output_size': 2 * 16, 'num_layers': 2, 'embedding_size': 16}
+    cfg['conv_lstm'] = {'output_size': 2**(7-cfg['depth']), 'num_layers': 2, 'embedding_size': 2**(7-cfg['depth'])}
     cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
     cfg['data_shape'] = [3, 128, 128, 128]
     if cfg['data_name'] in ['Turb']:
