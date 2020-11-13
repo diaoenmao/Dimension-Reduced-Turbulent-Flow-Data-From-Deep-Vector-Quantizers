@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import numpy as np
 from data import fetch_dataset, make_data_loader, BatchDataset
-from utils import save, makedir_exist_ok, to_device, process_control, process_dataset, collate
+from utils import save, load, makedir_exist_ok, to_device, process_control, process_dataset, collate
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 cudnn.benchmark = True
@@ -24,7 +24,7 @@ if args['control_name']:
     cfg['control'] = {k: v for k, v in zip(cfg['control'].keys(), args['control_name'].split('_'))} \
         if args['control_name'] != 'None' else {}
 cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
-
+cfg['ae_name'] = 'vqvae'
 
 def main():
     process_control()
@@ -34,11 +34,23 @@ def main():
 
 
 def runExperiment():
-    dataset = fetch_dataset(cfg['data_name'], cfg['subset'])
-    process_dataset(dataset)
-    data_loader = make_data_loader(dataset)
-    model = eval('models.{}(model_rate=cfg["global_model_rate"]).to(cfg["device"])'.format(cfg['model_name']))
-    summary = summarize(data_loader['train'], model)
+    if cfg['model_name'] in ['transformer', 'conv_lstm']:
+        ae_tag_list = ['0', cfg['data_name'], cfg['subset'], cfg['ae_name'], cfg['control_name']]
+        cfg['ae_tag'] = '_'.join([x for x in ae_tag_list if x])
+        dataset = {}
+        dataset['train'] = load('./output/code/train_{}.pt'.format(cfg['ae_tag']))
+        dataset['test'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
+        process_dataset(dataset)
+        dataset['train'] = BatchDataset(dataset['train'], cfg['bptt'], cfg['pred_length'])
+        dataset['test'] = BatchDataset(dataset['test'], cfg['bptt'], cfg['pred_length'])
+        model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
+        summary = summarize(dataset['train'], model)
+    else:
+        dataset = fetch_dataset(cfg['data_name'], cfg['subset'])
+        process_dataset(dataset)
+        data_loader = make_data_loader(dataset)
+        model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
+        summary = summarize(data_loader['train'], model)
     content, total = parse_summary(summary)
     print(content)
     save_result = total
@@ -122,20 +134,12 @@ def summarize(data_loader, model):
     hooks = []
     model.train(run_mode)
     model.apply(register_hook)
-    if cfg['data_name'] in ['MNIST', 'CIFAR10']:
-        for i, input in enumerate(data_loader):
+    for i, input in enumerate(data_loader):
+        if cfg['model_name'] not in ['transformer', 'conv_lstm']:
             input = collate(input)
-            input = to_device(input, cfg['device'])
-            model(input)
-            break
-    elif cfg['data_name'] in ['WikiText2']:
-        dataset = BatchDataset(data_loader.dataset, cfg['bptt'])
-        for i, input in enumerate(dataset):
-            input = to_device(input, cfg['device'])
-            model(input)
-            break
-    else:
-        raise ValueError('Not valid data name')
+        input = to_device(input, cfg['device'])
+        model(input)
+        break
     for h in hooks:
         h.remove()
     summary['total_num_params'] = 0
