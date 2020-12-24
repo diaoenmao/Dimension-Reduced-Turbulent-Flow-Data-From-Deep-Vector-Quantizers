@@ -26,7 +26,8 @@ cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']]) if '
 cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss', 'MSE', 'D_MSE', 'Physics']}
 cfg['ae_name'] = 'vqvae'
 cfg['model_name'] = 'conv_lstm'
-cfg['data_increment'] = 2
+cfg['data_increment'] = 1
+cfg['cyclic_prediction'] = True
 
 def main():
     process_control()
@@ -78,11 +79,19 @@ def test(uvw_dataset, code_dataset, model, ae, logger, epoch):
             code = code_dataset[i: i + (cfg['bptt'] + cfg['pred_length']) * spaceout: spaceout ]
             input_uvw = torch.stack(input_uvw, dim=0)
             input_duvw = torch.stack(input_duvw, dim=0)
-            code = code.unsqueeze(0)            
-            input = {'uvw': input_uvw[-cfg['pred_length']:], 'duvw': input_duvw[-cfg['pred_length']:],
+            code = code.unsqueeze(0) 
+            if i==0:                
+                input = {'uvw': input_uvw[-cfg['pred_length']:], 'duvw': input_duvw[-cfg['pred_length']:],
+                     'code': code[:, :cfg['bptt']], 'ncode': code[:, -cfg['pred_length']:]}
+            else:
+                if cfg['cyclic_prediction']:
+                    input = {'uvw': input_uvw[-cfg['pred_length']:], 'duvw': input_duvw[-cfg['pred_length']:],
+                         'code': output['code'], 'ncode': code[:, -cfg['pred_length']:]}
+                else:
+                    input = {'uvw': input_uvw[-cfg['pred_length']:], 'duvw': input_duvw[-cfg['pred_length']:],
                      'code': code[:, :cfg['bptt']], 'ncode': code[:, -cfg['pred_length']:]}
             input = to_device(input, cfg['device'])
-            output = model(input)
+            output = model(input)            
             output['uvw'] = ae.decode_code(output['code'].view(-1, *output['code'].size()[2:]))
             output['duvw'] = models.spectral_derivative_3d(output['uvw'])
             output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
@@ -95,7 +104,7 @@ def test(uvw_dataset, code_dataset, model, ae, logger, epoch):
         for j in range(output['uvw'].size(0)):
             vis_input = {'uvw': input['uvw'][j].unsqueeze(0), 'duvw': input['duvw'][j].unsqueeze(0)}
             vis_output = {'uvw': output['uvw'][j].unsqueeze(0), 'duvw': output['duvw'][j].unsqueeze(0)}
-            vis(vis_input, vis_output, './output/vis/p_{}_spaceout_{}'.format(j,spaceout))
+            vis(vis_input, vis_output, './output/vis/p_{}_spaceout_{}_cyclic_{}'.format(j, spaceout, cfg['cyclic_prediction']))
     return
 
 
