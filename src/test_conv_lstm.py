@@ -26,7 +26,7 @@ cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']]) if '
 cfg['metric_name'] = {'train': ['Loss'], 'test': ['Loss', 'MSE', 'D_MSE', 'Physics']}
 cfg['ae_name'] = 'vqvae'
 cfg['model_name'] = 'conv_lstm'
-
+cfg['data_increment'] = 2
 
 def main():
     process_control()
@@ -69,12 +69,13 @@ def test(uvw_dataset, code_dataset, model, ae, logger, epoch):
         metric = Metric()
         ae.train(False)
         model.train(False)
-        for i in range(0, len(uvw_dataset) - (cfg['bptt'] + cfg['pred_length']), 1):
+        spaceout = cfg['data_increment']
+        for i in range(0, len(uvw_dataset) - (cfg['bptt'] + cfg['pred_length']) * spaceout, 1):
             input_uvw, input_duvw = [], []
-            for j in range(i, i + cfg['bptt'] + cfg['pred_length']):
+            for j in range(i, i + (cfg['bptt'] + cfg['pred_length']) * spaceout, spaceout):
                 input_uvw.append(uvw_dataset[j]['uvw'])
                 input_duvw.append(uvw_dataset[j]['duvw'])
-            code = code_dataset[i: i + cfg['bptt'] + cfg['pred_length']]
+            code = code_dataset[i: i + (cfg['bptt'] + cfg['pred_length']) * spaceout: spaceout ]
             input_uvw = torch.stack(input_uvw, dim=0)
             input_duvw = torch.stack(input_duvw, dim=0)
             code = code.unsqueeze(0)            
@@ -94,7 +95,7 @@ def test(uvw_dataset, code_dataset, model, ae, logger, epoch):
         for j in range(output['uvw'].size(0)):
             vis_input = {'uvw': input['uvw'][j].unsqueeze(0), 'duvw': input['duvw'][j].unsqueeze(0)}
             vis_output = {'uvw': output['uvw'][j].unsqueeze(0), 'duvw': output['duvw'][j].unsqueeze(0)}
-            vis(vis_input, vis_output, './output/vis/p_{}'.format(j))
+            vis(vis_input, vis_output, './output/vis/p_{}_spaceout_{}'.format(j,spaceout))
     return
 
 
