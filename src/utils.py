@@ -122,7 +122,7 @@ def process_control():
         cfg[model_name]['threshold'] = 1.0e-4
         cfg[model_name]['min_lr'] = 1.0e-5
         if model_name in ['vqvae']:
-            cfg[model_name]['lr'] = 3e-4
+            cfg[model_name]['lr'] = 1e-3
             cfg[model_name]['optimizer_name'] = 'Adam'
             cfg[model_name]['weight_decay'] = 5e-4
             cfg[model_name]['num_epochs'] = 200
@@ -209,7 +209,7 @@ def make_scheduler(optimizer, tag):
                                                          eta_min=cfg[tag]['min_lr'])
     elif cfg[tag]['scheduler_name'] == 'ReduceLROnPlateau':
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=cfg[tag]['factor'],
-                                                         patience=cfg[tag]['patience'], verbose=False,
+                                                         patience=cfg[tag]['patience'], verbose=True,
                                                          threshold=cfg[tag]['threshold'], threshold_mode='rel',
                                                          min_lr=cfg[tag]['min_lr'])
     elif cfg[tag]['scheduler_name'] == 'CyclicLR':

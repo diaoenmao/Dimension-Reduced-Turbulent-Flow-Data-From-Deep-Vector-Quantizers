@@ -10,10 +10,10 @@ class ResBlock(nn.Module):
     def __init__(self, hidden_size):
         super().__init__()
         self.conv = nn.Sequential(
-            nn.BatchNorm3d(hidden_size),
+            nn.InstanceNorm3d(hidden_size),
             nn.ReLU(inplace=True),
             nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
-            nn.BatchNorm3d(hidden_size),
+            nn.InstanceNorm3d(hidden_size),
             nn.ReLU(inplace=True),
             nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
         )
@@ -30,14 +30,14 @@ class Encoder(nn.Module):
         blocks = [nn.Conv3d(input_size, hidden_size // (2 ** depth), 3, 1, 1)]
         for i in range(depth):
             blocks.extend([
-                nn.BatchNorm3d(hidden_size // (2 ** (depth - i))),
+                nn.InstanceNorm3d(hidden_size // (2 ** (depth - i))),
                 nn.ReLU(inplace=True),
                 nn.Conv3d(hidden_size // (2 ** (depth - i)), hidden_size // (2 ** (depth - i - 1)), 4, 2, 1)
             ])
         for i in range(num_res_block):
             blocks.append(ResBlock(hidden_size))
         blocks.extend([
-            nn.BatchNorm3d(hidden_size),
+            nn.InstanceNorm3d(hidden_size),
             nn.ReLU(inplace=True),
             nn.Conv3d(hidden_size, output_size, 3, 1, 1)
         ])
@@ -56,12 +56,12 @@ class Decoder(nn.Module):
             blocks.append(ResBlock(hidden_size))
         for i in range(depth):
             blocks.extend([
-                nn.BatchNorm3d(hidden_size // (2 ** i)),
+                nn.InstanceNorm3d(hidden_size // (2 ** i)),
                 nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size // (2 ** i), hidden_size // (2 ** (i + 1)), 4, 2, 1)
             ])
         blocks.extend([
-            nn.BatchNorm3d(hidden_size // (2 ** depth)),
+            nn.InstanceNorm3d(hidden_size // (2 ** depth)),
             nn.ReLU(inplace=True),
             nn.Conv3d(hidden_size // (2 ** depth), output_size, 3, 1, 1)
         ])
@@ -73,7 +73,7 @@ class Decoder(nn.Module):
 
 
 class VQVAE(nn.Module):
-    def __init__(self, depth, hidden_size, num_res_block, embedding_size, num_embedding, vq_commit):
+    def __init__(self, depth, hidden_size, embedding_size, num_embedding, num_res_block, vq_commit):
         super().__init__()
         self.encoder = Encoder(1, hidden_size, embedding_size, num_res_block, depth)
         self.quantizer = VectorQuantization(embedding_size, num_embedding, vq_commit)
@@ -96,6 +96,7 @@ class VQVAE(nn.Module):
 
     def forward(self, input):
         output = {'loss': torch.tensor(0, device=cfg['device'], dtype=torch.float32)}
+        input['uvw'] = input['uvw']
         x = input['uvw']
         N, C, U, V, W = x.size()
         x = x.view(N * C, 1, U, V, W)
@@ -111,7 +112,7 @@ class VQVAE(nn.Module):
                 if cfg['loss_mode'][i] == 'exact':
                     output['loss'] += cfg['loss_commit'][i] * F.mse_loss(output['duvw'], input['duvw'])
                 elif cfg['loss_mode'][i] == 'physics':
-                    output['loss'] += cfg['loss_commit'][i] * physics(output['duvw'], input['duvw'])
+                    output['loss'] += cfg['loss_commit'][i] * physics(output['duvw'])
                 else:
                     raise ValueError('Not valid loss mode')
         return output
@@ -124,6 +125,6 @@ def vqvae():
     embedding_size = cfg['vqvae']['embedding_size']
     num_embedding = cfg['vqvae']['num_embedding']
     vq_commit = cfg['vqvae']['vq_commit']
-    model = VQVAE(depth, hidden_size, num_res_block, embedding_size, num_embedding, vq_commit)
+    model = VQVAE(depth, hidden_size, embedding_size, num_embedding, num_res_block, vq_commit)
     model.apply(init_param)
     return model

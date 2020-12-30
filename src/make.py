@@ -48,7 +48,7 @@ def main():
         filename = '{}_{}'.format(run, model)
         model_names = [[model]]
         data_names = [['Turb']]
-        control_name = [[['3'], ['exact-physics'], ['0-0', '0.1-0', '0-0.0001', '0.1-0.0001']]]
+        control_name = [[['3'], ['exact-physics'], ['0-0', '0.01-0', '0-0.0001', '0.01-0.0001']]]
         controls = make_controls(script_name, data_names, model_names, init_seeds, world_size, num_experiments,
                                  resume_mode, control_name)
     else:

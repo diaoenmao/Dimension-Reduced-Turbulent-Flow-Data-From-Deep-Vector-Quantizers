@@ -26,7 +26,7 @@ class Turb(Dataset):
         return data
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data['uvw'])
 
     @property
     def processed_folder(self):

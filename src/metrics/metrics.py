@@ -12,7 +12,7 @@ def MSE(output, target):
 
 
 def Physics(output, target):
-    phy = physics(output, target).item()
+    phy = physics(output).item()
     return phy
 
 
@@ -42,7 +42,7 @@ class Metric(object):
         self.metric = {'Loss': lambda input, output: output['loss'].item(),
                        'MSE': lambda input, output: recur(MSE, output['uvw'], input['uvw']),
                        'D_MSE': lambda input, output: recur(MSE, output['duvw'], input['duvw']),
-                       'Physics': lambda input, output: recur(Physics, output['duvw'], input['duvw']),
+                       'Physics': lambda input, output: recur(Physics, output['duvw']),
                        'PSNR': lambda input, output: recur(PSNR, output['uvw'], input['uvw']),
                        'MAE': lambda input, output: recur(MAE, output['uvw'], input['uvw']),
                        'MSSIM': lambda input, output: recur(MSSIM, output['uvw'], input['uvw'])}

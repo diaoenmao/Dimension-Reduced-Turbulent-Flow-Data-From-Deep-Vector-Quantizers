@@ -27,7 +27,7 @@ def spectral_derivative_3d(V):
     return dV
 
 
-def physics_old(A):
+def physics(A):
     A11, A22, A33 = A[:, 0, 0], A[:, 1, 1], A[:, 2, 2]
     continuity = (A11 + A22 + A33).mean()
     S = 0.5 * (A + A.transpose(1, 2))
@@ -35,7 +35,18 @@ def physics_old(A):
     S_ijS_ij = (S * S).sum(dim=[1, 2])
     R_ijR_ij = (R * R).sum(dim=[1, 2])
     flow = (S_ijS_ij - R_ijR_ij).mean()
+    output = continuity + flow
+    return output
 
+
+def physics_old_2(A):
+    A11, A22, A33 = A[:, 0, 0], A[:, 1, 1], A[:, 2, 2]
+    continuity = (A11 + A22 + A33).mean()
+    S = 0.5 * (A + A.transpose(1, 2))
+    R = 0.5 * (A - A.transpose(1, 2))
+    S_ijS_ij = (S * S).sum(dim=[1, 2])
+    R_ijR_ij = (R * R).sum(dim=[1, 2])
+    flow = (S_ijS_ij - R_ijR_ij).mean()
     S = S.permute(0, 3, 4, 5, 1, 2)
     R = R.permute(0, 3, 4, 5, 1, 2)
     SijSkjSji = torch.sum(torch.matmul(S, S) * S, axis=(4, 5))
@@ -50,7 +61,7 @@ def physics_old(A):
     return output
 
 
-def physics(A_model, A_target):
+def physics_old(A_model, A_target):
     # continuity = [None, None]
     S_ijS_ij_m = [None, None]
     R_ijR_ij_m = [None, None]
@@ -81,7 +92,6 @@ def physics(A_model, A_target):
     output = 0
     for i, item in enumerate([S_ijS_ij_m, R_ijR_ij_m, SijSkjSji_m, VortexStret_m]):
         output += (item[1] - item[0]) * weight[i]
-
     return output
 
 
