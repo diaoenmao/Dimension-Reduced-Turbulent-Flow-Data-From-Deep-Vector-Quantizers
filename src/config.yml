@@ -1,50 +1,20 @@
 ---
 # control
 control:
-  depth: '1'
-  d_mode: 'exact-physics'
-  d_commit: '0.1-0.0001'
+  depth: '3'
+  loss_mode: 'exact-physics'
+  loss_commit: '0.1-0.0001'
 # data
 data_name: Turb
-subset: uvw
-batch_size:
-  train: 128
-  test: 128
-shuffle:
-  train: True
-  test: False
-num_workers: 0
+# model
 model_name: vqvae
-metric_name:
-  train:
-    - Loss
-    - NLL
-  test:
-    - Loss
-    - NLL
-# optimizer
-optimizer_name: Adam
-lr: 3.0e-4
-momentum: 0
-weight_decay: 0
-# scheduler
-scheduler_name: ReduceLROnPlateau
-step_size: 1
-milestones:
-  - 100
-  - 150
-patience: 10
-threshold: 1.0e-4
-factor: 0.5
-min_lr: 1.0e-5
 # experiment
+num_workers: 0
 init_seed: 0
 num_experiments: 1
-num_epochs: 300
 log_interval: 0.25
 device: cuda
 world_size: 1
 resume_mode: 0
 # other
-show: False
 fig_format: png

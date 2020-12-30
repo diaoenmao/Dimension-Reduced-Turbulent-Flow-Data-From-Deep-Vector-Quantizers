@@ -34,8 +34,8 @@ def main():
 
 
 def runExperiment():
-    if cfg['model_name'] in ['transformer', 'conv_lstm']:
-        ae_tag_list = ['0', cfg['data_name'], cfg['subset'], cfg['ae_name'], cfg['control_name']]
+    if cfg['model_name'] in ['transformer', 'convlstm']:
+        ae_tag_list = ['0', cfg['data_name'], cfg['ae_name'], cfg['control_name']]
         cfg['ae_tag'] = '_'.join([x for x in ae_tag_list if x])
         dataset = {}
         dataset['train'] = load('./output/code/train_{}.pt'.format(cfg['ae_tag']))
@@ -46,9 +46,11 @@ def runExperiment():
         model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
         summary = summarize(dataset['train'], model)
     else:
-        dataset = fetch_dataset(cfg['data_name'], cfg['subset'])
+        model_tag_list = ['0', cfg['data_name'], cfg['model_name'], cfg['control_name']]
+        cfg['model_tag'] = '_'.join([x for x in model_tag_list if x])
+        dataset = fetch_dataset(cfg['data_name'])
         process_dataset(dataset)
-        data_loader = make_data_loader(dataset)
+        data_loader = make_data_loader(dataset, cfg['model_name'])
         model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
         summary = summarize(data_loader['train'], model)
     content, total = parse_summary(summary)

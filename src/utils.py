@@ -105,42 +105,37 @@ def process_dataset(dataset):
 
 
 def process_control():
-    cfg['depth'] = int(cfg['control']['depth'])
-    cfg['d_mode'] = [str(x) for x in cfg['control']['d_mode'].split('-')]
-    cfg['d_commit'] = [float(x) for x in cfg['control']['d_commit'].split('-')]
-    cfg['vqvae'] = {'hidden_size': 128, 'depth': cfg['depth'], 'num_res_block': 2, 'res_size': 32, 'embedding_size': 64,
-                    'num_embedding': 512, 'vq_commit': 0.25}
-    cfg['transformer'] = {'embedding_size': 2**(7-cfg['depth']), 'num_heads': 2, 'hidden_size': 2**(7-cfg['depth']), 'num_layers': 2,
-                          'dropout': 0.2}
-    cfg['conv_lstm'] = {'output_size': 2**(7-cfg['depth']), 'num_layers': 2, 'embedding_size': 2**(7-cfg['depth'])}
-    cfg['conv_lstm']['input_size'] = cfg['conv_lstm']['embedding_size']
-    cfg['data_shape'] = [3, 128, 128, 128]
-    if cfg['data_name'] in ['Turb']:
-        if cfg['model_name'] in ['vqvae']:
-            cfg['batch_size'] = {'train': 1, 'test': 1}
-            cfg['num_epochs'] = 200
-            cfg['optimizer_name'] = 'Adam'
-            cfg['lr'] = 1e-3
-            cfg['weight_decay'] = 5e-4
-            cfg['scheduler_name'] = 'ReduceLROnPlateau'
-        elif cfg['model_name'] in ['conv_lstm']:
-            cfg['batch_size'] = {'train': 1, 'test': 1}
-            cfg['num_epochs'] = 350
-            cfg['optimizer_name'] = 'Adam'
-            cfg['lr'] = 1e-3
-            cfg['weight_decay'] = 5e-4
-            cfg['scheduler_name'] = 'ReduceLROnPlateau'
-            cfg['bptt'] = 2
-            cfg['pred_length'] = 2
-        elif cfg['model_name'] in ['transformer']:
-            cfg['batch_size'] = {'train': 1, 'test': 1}
-            cfg['num_epochs'] = 250
-            cfg['optimizer_name'] = 'Adam'
-            cfg['lr'] = 1e-3
-            cfg['weight_decay'] = 5e-4
-            cfg['scheduler_name'] = 'ReduceLROnPlateau'
-            cfg['bptt'] = 2
-            cfg['pred_length'] = 2
+    data_shape = {'Turb': [3, 128, 128, 128]}
+    cfg['data_shape'] = data_shape[cfg['data_name']]
+    cfg['loss_mode'] = [str(x) for x in cfg['control']['loss_mode'].split('-')]
+    cfg['loss_commit'] = [float(x) for x in cfg['control']['loss_commit'].split('-')]
+    cfg['vqvae'] = {'depth': int(cfg['control']['depth']), 'hidden_size': 128, 'embedding_size': 64,
+                    'num_embedding': 512, 'num_res_block': 2, 'vq_commit': 0.25}
+    cfg['transformer'] = {'embedding_size': 64, 'num_heads': 2, 'hidden_size': 64, 'num_layers': 2, 'dropout': 0.2}
+    cfg['convlstm'] = {'input_size': 64, 'output_size': 64, 'embedding_size': 64, 'num_layers': 2}
+    for model_name in ['vqvae', 'transformer', 'convlstm']:
+        cfg[model_name]['batch_size'] = {'train': 1, 'test': 1}
+        cfg[model_name]['shuffle'] = {'train': True, 'test': False}
+        cfg[model_name]['scheduler_name'] = 'ReduceLROnPlateau'
+        cfg[model_name]['factor'] = 0.5
+        cfg[model_name]['patience'] = 10
+        cfg[model_name]['threshold'] = 1.0e-4
+        cfg[model_name]['min_lr'] = 1.0e-5
+        if model_name in ['vqvae']:
+            cfg[model_name]['lr'] = 3e-4
+            cfg[model_name]['optimizer_name'] = 'Adam'
+            cfg[model_name]['weight_decay'] = 5e-4
+            cfg[model_name]['num_epochs'] = 200
+        elif model_name in ['transformer']:
+            cfg[model_name]['lr'] = 1e-3
+            cfg[model_name]['optimizer_name'] = 'Adam'
+            cfg[model_name]['weight_decay'] = 5e-4
+            cfg[model_name]['num_epochs'] = 200
+        elif model_name in ['convlstm']:
+            cfg[model_name]['lr'] = 1e-3
+            cfg[model_name]['optimizer_name'] = 'Adam'
+            cfg[model_name]['weight_decay'] = 5e-4
+            cfg[model_name]['num_epochs'] = 200
         else:
             raise ValueError('Not valid model name')
     return
@@ -188,41 +183,37 @@ class Stats(object):
         return
 
 
-def make_optimizer(model):
-    if cfg['optimizer_name'] == 'SGD':
-        optimizer = optim.SGD(model.parameters(), lr=cfg['lr'], momentum=cfg['momentum'],
-                              weight_decay=cfg['weight_decay'])
-    elif cfg['optimizer_name'] == 'RMSprop':
-        optimizer = optim.RMSprop(model.parameters(), lr=cfg['lr'], momentum=cfg['momentum'],
-                                  weight_decay=cfg['weight_decay'])
-    elif cfg['optimizer_name'] == 'Adam':
-        optimizer = optim.Adam(model.parameters(), lr=cfg['lr'], weight_decay=cfg['weight_decay'])
-    elif cfg['optimizer_name'] == 'Adamax':
-        optimizer = optim.Adamax(model.parameters(), lr=cfg['lr'], weight_decay=cfg['weight_decay'])
+def make_optimizer(model, tag):
+    if cfg[tag]['optimizer_name'] == 'SGD':
+        optimizer = optim.SGD(model.parameters(), lr=cfg[tag]['lr'], momentum=cfg[tag]['momentum'],
+                              weight_decay=cfg[tag]['weight_decay'])
+    elif cfg[tag]['optimizer_name'] == 'Adam':
+        optimizer = optim.Adam(model.parameters(), lr=cfg[tag]['lr'], weight_decay=cfg[tag]['weight_decay'])
     else:
         raise ValueError('Not valid optimizer name')
     return optimizer
 
 
-def make_scheduler(optimizer):
-    if cfg['scheduler_name'] == 'None':
+def make_scheduler(optimizer, tag):
+    if cfg[tag]['scheduler_name'] == 'None':
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[65535])
-    elif cfg['scheduler_name'] == 'StepLR':
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=cfg['step_size'], gamma=cfg['factor'])
-    elif cfg['scheduler_name'] == 'MultiStepLR':
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg['milestones'], gamma=cfg['factor'])
-    elif cfg['scheduler_name'] == 'ExponentialLR':
+    elif cfg[tag]['scheduler_name'] == 'StepLR':
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=cfg[tag]['step_size'], gamma=cfg[tag]['factor'])
+    elif cfg[tag]['scheduler_name'] == 'MultiStepLR':
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg[tag]['milestones'],
+                                                   gamma=cfg[tag]['factor'])
+    elif cfg[tag]['scheduler_name'] == 'ExponentialLR':
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
-    elif cfg['scheduler_name'] == 'CosineAnnealingLR':
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['num_epochs']['global'],
-                                                         eta_min=cfg['min_lr'])
-    elif cfg['scheduler_name'] == 'ReduceLROnPlateau':
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=cfg['factor'],
-                                                         patience=cfg['patience'], verbose=True,
-                                                         threshold=cfg['threshold'], threshold_mode='rel',
-                                                         min_lr=cfg['min_lr'])
-    elif cfg['scheduler_name'] == 'CyclicLR':
-        scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=cfg['lr'], max_lr=10 * cfg['lr'])
+    elif cfg[tag]['scheduler_name'] == 'CosineAnnealingLR':
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg[tag]['num_epochs']['global'],
+                                                         eta_min=cfg[tag]['min_lr'])
+    elif cfg[tag]['scheduler_name'] == 'ReduceLROnPlateau':
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=cfg[tag]['factor'],
+                                                         patience=cfg[tag]['patience'], verbose=False,
+                                                         threshold=cfg[tag]['threshold'], threshold_mode='rel',
+                                                         min_lr=cfg[tag]['min_lr'])
+    elif cfg[tag]['scheduler_name'] == 'CyclicLR':
+        scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=cfg[tag]['lr'], max_lr=10 * cfg[tag]['lr'])
     else:
         raise ValueError('Not valid scheduler name')
     return scheduler

@@ -186,3 +186,27 @@ from logger import Logger
 #         input_size = input['uvw'].size(0)
 #         print(input['uvw'].size(), input['duvw'].size())
 #         exit()
+
+# import torch.fft
+# import torch.nn.functional as F
+# from scipy.fftpack import fftn
+#
+# if __name__ == '__main__':
+#     a = torch.randn(1, 3, 8, 8, 8)
+#     b = torch.rfft(a, signal_ndim=3, onesided=False)
+#     c = torch.fft.fftn(a, dim=[-3, -2,-1])
+#     d = fftn(a.numpy(), axes=[-3, -2,-1])
+#     print(b.size(), c.size())
+#     print(torch.allclose(b[..., 0], c.real))
+#     print(F.l1_loss(c.real, b[..., 0], reduction='mean'))
+#     print(torch.allclose(b[...,0], torch.tensor(d.real)))
+#     print(F.l1_loss(b[...,0], torch.tensor(d.real), reduction='mean'))
+#     print(torch.allclose(c.real, torch.tensor(d.real)))
+#     print(F.l1_loss(c.real, torch.tensor(d.real), reduction='mean'))
+#
+#     print(torch.allclose(b[..., 1], c.imag))
+#     print(F.l1_loss(c.imag, b[..., 1], reduction='mean'))
+#     print(torch.allclose(b[...,1], torch.tensor(d.imag)))
+#     print(F.l1_loss(b[...,1], torch.tensor(d.imag), reduction='mean'))
+#     print(torch.allclose(c.imag, torch.tensor(d.imag)))
+#     print(F.l1_loss(c.imag, torch.tensor(d.imag), reduction='mean'))

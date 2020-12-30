@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import datasets
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
@@ -6,13 +7,13 @@ from torch.utils.data import Dataset
 from config import cfg
 
 
-def fetch_dataset(data_name, subset):
+def fetch_dataset(data_name):
     dataset = {}
     print('fetching data {}...'.format(data_name))
     root = './data/{}'.format(data_name)
     if data_name == 'Turb':
-        dataset['train'] = datasets.Turb(root=root, split='train', subset=subset)
-        dataset['test'] = datasets.Turb(root=root, split='test', subset=subset)
+        dataset['train'] = datasets.Turb(root=root, split='train')
+        dataset['test'] = datasets.Turb(root=root, split='test')
     else:
         raise ValueError('Not valid dataset name')
     print('data ready')
@@ -30,12 +31,13 @@ def input_collate(batch):
         return default_collate(batch)
 
 
-def make_data_loader(dataset):
+def make_data_loader(dataset, tag, shuffle=None):
     data_loader = {}
     for k in dataset:
-        data_loader[k] = torch.utils.data.DataLoader(dataset=dataset[k], shuffle=cfg['shuffle'][k],
-                                                     batch_size=cfg['batch_size'][k], pin_memory=True,
-                                                     num_workers=cfg['num_workers'], collate_fn=input_collate)
+        _shuffle = cfg[tag]['shuffle'][k] if shuffle is None else shuffle[k]
+        data_loader[k] = DataLoader(dataset=dataset[k], shuffle=_shuffle, batch_size=cfg[tag]['batch_size'][k],
+                                    pin_memory=True, num_workers=cfg['num_workers'], collate_fn=input_collate,
+                                    worker_init_fn=np.random.seed(0))
     return data_loader
 
 
@@ -54,5 +56,6 @@ class BatchDataset(Dataset):
     def __getitem__(self, index):
         seq_length = min(self.seq_length, self.S - 1 - index)
         input = {'code': self.dataset[:, self.idx[index]:self.idx[index] + seq_length],
-                 'ncode': self.dataset[:, self.idx[index] + seq_length:self.idx[index] +  seq_length + self.seq_length_pre]}
+                 'ncode': self.dataset[:,
+                          self.idx[index] + seq_length:self.idx[index] + seq_length + self.seq_length_pre]}
         return input
