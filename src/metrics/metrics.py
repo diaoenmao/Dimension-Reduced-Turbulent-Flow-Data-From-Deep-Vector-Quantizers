@@ -11,7 +11,7 @@ def MSE(output, target):
     return mse
 
 
-def Physics(output, target):
+def Physics(output):
     phy = physics(output).item()
     return phy
 

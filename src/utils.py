@@ -110,7 +110,7 @@ def process_control():
     cfg['loss_mode'] = [str(x) for x in cfg['control']['loss_mode'].split('-')]
     cfg['loss_commit'] = [float(x) for x in cfg['control']['loss_commit'].split('-')]
     cfg['vqvae'] = {'depth': int(cfg['control']['depth']), 'hidden_size': 128, 'embedding_size': 64,
-                    'num_embedding': 512, 'num_res_block': 2, 'vq_commit': 0.25}
+                    'num_embedding': 512, 'num_res_block': 2, 'res_size': 32, 'vq_commit': 0.25}
     cfg['transformer'] = {'embedding_size': 64, 'num_heads': 2, 'hidden_size': 64, 'num_layers': 2, 'dropout': 0.2}
     cfg['convlstm'] = {'input_size': 64, 'output_size': 64, 'embedding_size': 64, 'num_layers': 2}
     for model_name in ['vqvae', 'transformer', 'convlstm']:

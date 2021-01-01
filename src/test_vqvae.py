@@ -44,7 +44,7 @@ def runExperiment():
     process_dataset(dataset)
     data_loader = make_data_loader(dataset, cfg['model_name'])
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
-    metric = Metric({'test': ['Loss']})
+    metric = Metric({'test': ['Loss', 'D_MSE', 'Physics']})
     last_epoch, model, _, _, _ = resume(model, cfg['model_tag'], load_tag='best')
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
     logger_path = 'output/runs/test_{}_{}'.format(cfg['model_tag'], current_time)
@@ -72,6 +72,7 @@ def test(data_loader, model, metric, logger, epoch):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         print(logger.write('test', metric.metric_name['test']))
+        vis(input, output, './output/vis')
     return
 
 
