@@ -29,12 +29,12 @@ def spectral_derivative_3d(V):
 
 def physics(A):
     A11, A22, A33 = A[:, 0, 0], A[:, 1, 1], A[:, 2, 2]
-    continuity = (A11 + A22 + A33).mean()
+    continuity = (A11 + A22 + A33).abs().mean()
     S = 0.5 * (A + A.transpose(1, 2))
     R = 0.5 * (A - A.transpose(1, 2))
     S_ijS_ij = (S * S).sum(dim=[1, 2])
     R_ijR_ij = (R * R).sum(dim=[1, 2])
-    flow = (S_ijS_ij - R_ijR_ij).mean()
+    flow = (S_ijS_ij - R_ijR_ij).abs().mean()
     output = continuity + flow
     return output
 
@@ -98,6 +98,13 @@ def physics_old(A_model, A_target):
 def gaussian(window_size, sigma):
     gauss = torch.Tensor([exp(-(x - window_size // 2) ** 2 / float(2 * sigma ** 2)) for x in range(window_size)])
     return gauss / gauss.sum()
+
+
+def weighted_mse_loss(input, target, weight=(2. * torch.ones(3, 3)).fill_diagonal_(1)):
+    weight = weight.view(3, 3, 1, 1, 1).to(input.device)
+    loss = nn.functional.mse_loss(input, target, reduction='none')
+    loss = (loss * weight).mean()
+    return loss
 
 
 def create_window_3D(window_size, channel):

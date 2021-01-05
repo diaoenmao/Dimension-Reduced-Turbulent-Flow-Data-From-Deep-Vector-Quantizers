@@ -19,15 +19,14 @@ for k in cfg:
 if args['control_name']:
     cfg['control'] = {k: v for k, v in zip(cfg['control'].keys(), args['control_name'].split('_'))} \
         if args['control_name'] != 'None' else {}
-cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
-cfg['shuffle'] = {'train': False, 'test': False}
+cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']]) if 'control' in cfg else ''
 
 
 def main():
     process_control()
     seeds = list(range(cfg['init_seed'], cfg['init_seed'] + cfg['num_experiments']))
     for i in range(cfg['num_experiments']):
-        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['subset'], cfg['model_name'], cfg['control_name']]
+        model_tag_list = [str(seeds[i]), cfg['data_name'], cfg['model_name'], cfg['control_name']]
         cfg['model_tag'] = '_'.join([x for x in model_tag_list if x])
         print('Experiment: {}'.format(cfg['model_tag']))
         runExperiment()
@@ -38,9 +37,9 @@ def runExperiment():
     seed = int(cfg['model_tag'].split('_')[0])
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    dataset = fetch_dataset(cfg['data_name'], cfg['subset'])
+    dataset = fetch_dataset(cfg['data_name'])
     process_dataset(dataset['train'])
-    data_loader = make_data_loader(dataset)
+    data_loader = make_data_loader(dataset, cfg['model_name'], {'train': False, 'test': False})
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     load_tag = 'best'
     last_epoch, model, _, _, _ = resume(model, cfg['model_tag'], load_tag=load_tag)
@@ -59,7 +58,7 @@ def encode(data_loader, model):
             input = collate(input)
             input = to_device(input, cfg['device'])
             _, _, code_i = model.encode(input['uvw'])
-            code.append(code_i)
+            code.append(code_i.cpu())
         code = torch.cat(code, dim=0)
     return code
 

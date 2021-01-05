@@ -48,18 +48,16 @@ class Metric(object):
                        'MSSIM': lambda input, output: recur(MSSIM, output['uvw'], input['uvw'])}
 
     def make_metric_name(self, metric_name):
-        for split in metric_name:
-            if cfg['data_name'] in ['Turb']:
-                metric_name[split] += ['MSE']
-            else:
-                raise ValueError('Not valid data name')
         return metric_name
 
     def make_pivot(self):
         if cfg['data_name'] in ['Turb']:
-            pivot = float('inf')
-            pivot_name = 'MSE'
-            pivot_direction = 'down'
+            if cfg['model_name'] in ['transformer', 'convlstm', 'vqvae']:
+                pivot = float('inf')
+                pivot_name = 'MSE'
+                pivot_direction = 'down'
+            else:
+                raise ValueError('Not valid model name')
         else:
             raise ValueError('Not valid data name')
         return pivot, pivot_name, pivot_direction

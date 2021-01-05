@@ -35,14 +35,15 @@ def main():
 
 def runExperiment():
     if cfg['model_name'] in ['transformer', 'convlstm']:
-        ae_tag_list = ['0', cfg['data_name'], cfg['ae_name'], cfg['control_name']]
+        cfg['ae_control_name'] = '_'.join([cfg['control'][k] for k in cfg['control'] if k not in ['seq_length']])
+        ae_tag_list = ['0', cfg['data_name'], cfg['ae_name'], cfg['ae_control_name']]
         cfg['ae_tag'] = '_'.join([x for x in ae_tag_list if x])
         dataset = {}
         dataset['train'] = load('./output/code/train_{}.pt'.format(cfg['ae_tag']))
         dataset['test'] = load('./output/code/test_{}.pt'.format(cfg['ae_tag']))
         process_dataset(dataset)
-        dataset['train'] = BatchDataset(dataset['train'], cfg['bptt'], cfg['pred_length'])
-        dataset['test'] = BatchDataset(dataset['test'], cfg['bptt'], cfg['pred_length'])
+        dataset['train'] = BatchDataset(dataset['train'], cfg['seq_length'])
+        dataset['test'] = BatchDataset(dataset['test'], cfg['seq_length'])
         model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
         summary = summarize(dataset['train'], model)
     else:
@@ -137,7 +138,7 @@ def summarize(data_loader, model):
     model.train(run_mode)
     model.apply(register_hook)
     for i, input in enumerate(data_loader):
-        if cfg['model_name'] not in ['transformer', 'conv_lstm']:
+        if cfg['model_name'] not in ['transformer', 'convlstm']:
             input = collate(input)
         input = to_device(input, cfg['device'])
         model(input)

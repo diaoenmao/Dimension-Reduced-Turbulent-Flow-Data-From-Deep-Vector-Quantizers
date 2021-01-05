@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from config import cfg
 from modules import VectorQuantization
-from .utils import init_param, spectral_derivative_3d, physics
+from .utils import init_param, spectral_derivative_3d, weighted_mse_loss, physics
 
 
 class ResBlock(nn.Module):
@@ -118,30 +118,33 @@ class VQVAE(nn.Module):
         self.decoder = Decoder(embedding_size, hidden_size, 1, num_res_block, res_size, depth)
 
     def encode(self, input):
-        x = input
+        x = input.view(input.size(0) * input.size(1), -1, *input.size()[2:])
         encoded = self.encoder(x)
         quantized, diff, code = self.quantizer(encoded)
+        quantized = quantized.view(input.size(0), input.size(1), *quantized.size()[1:])
+        code = code.view(input.size(0), input.size(1), *code.size()[1:])
         return quantized, diff, code
 
     def decode(self, quantized):
-        decoded = self.decoder(quantized)
+        x = quantized.view(quantized.size(0) * quantized.size(1), *quantized.size()[2:])
+        decoded = self.decoder(x)
+        decoded = decoded.view(quantized.size(0), quantized.size(1), *decoded.size()[2:])
         return decoded
 
     def decode_code(self, code):
-        quantized = self.quantizer.embedding_code(code).transpose(1, -1).contiguous()
+        x = code.view(code.size(0) * code.size(1), *code.size()[2:])
+        quantized = self.quantizer.embedding_code(x)
+        quantized = quantized.view(code.size(0), code.size(1), *quantized.size()[1:])
         decoded = self.decode(quantized)
         return decoded
 
     def forward(self, input):
         output = {'loss': torch.tensor(0, device=cfg['device'], dtype=torch.float32)}
-        input['uvw'] = input['uvw']
         x = input['uvw']
-        N, C, U, V, W = x.size()
-        x = x.view(N * C, 1, U, V, W)
         quantized, diff, code = self.encode(x)
-        output['code'] = code.view(N, C, *code.size()[1:])
+        output['code'] = code
         decoded = self.decode(quantized)
-        output['uvw'] = decoded.view(N, C, U, V, W)
+        output['uvw'] = decoded
         output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + diff
         for i in range(len(cfg['loss_mode'])):
             if 'duvw' not in output:
@@ -149,7 +152,7 @@ class VQVAE(nn.Module):
                     output['duvw'] = spectral_derivative_3d(output['uvw'])
             if cfg['loss_commit'][i] > 0:
                 if cfg['loss_mode'][i] == 'exact':
-                    output['loss'] += cfg['loss_commit'][i] * F.mse_loss(output['duvw'], input['duvw'])
+                    output['loss'] += cfg['loss_commit'][i] * weighted_mse_loss(output['duvw'], input['duvw'])
                 elif cfg['loss_mode'][i] == 'physics':
                     output['loss'] += cfg['loss_commit'][i] * physics(output['duvw'])
                 else:

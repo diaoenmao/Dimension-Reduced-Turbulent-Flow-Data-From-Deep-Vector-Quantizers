@@ -3,7 +3,8 @@
 control:
   depth: '3'
   loss_mode: 'exact-physics'
-  loss_commit: '0-0'
+  loss_commit: '0-0.0001'
+  seq_length: '4-4'
 # data
 data_name: Turb
 # model

@@ -98,9 +98,9 @@ def recur(fn, input, *args):
 
 
 def process_dataset(dataset):
-    if cfg['model_name'] in ['transformer', 'conv_lstm']:
+    if cfg['model_name'] in ['transformer', 'convlstm']:
         for split in dataset:
-            dataset[split] = batchify(dataset[split], cfg['batch_size'][split])
+            dataset[split] = batchify(dataset[split], cfg[cfg['model_name']]['batch_size'][split])
     return
 
 
@@ -109,32 +109,46 @@ def process_control():
     cfg['data_shape'] = data_shape[cfg['data_name']]
     cfg['loss_mode'] = [str(x) for x in cfg['control']['loss_mode'].split('-')]
     cfg['loss_commit'] = [float(x) for x in cfg['control']['loss_commit'].split('-')]
+    cfg['seq_length'] = [int(x) for x in cfg['control']['seq_length'].split('-')] if 'seq_length' in cfg[
+        'control'] else None
     cfg['vqvae'] = {'depth': int(cfg['control']['depth']), 'hidden_size': 128, 'embedding_size': 64,
                     'num_embedding': 512, 'num_res_block': 2, 'res_size': 32, 'vq_commit': 0.25}
-    cfg['transformer'] = {'embedding_size': 64, 'num_heads': 2, 'hidden_size': 64, 'num_layers': 2, 'dropout': 0.2}
-    cfg['convlstm'] = {'input_size': 64, 'output_size': 64, 'embedding_size': 64, 'num_layers': 2}
+    cfg['transformer'] = {'embedding_size': 64, 'hidden_size': 256, 'num_heads': 2, 'dropout': 0.2, 'num_layers': 2}
+    cfg['convlstm'] = {'hidden_size': 64, 'num_layers': 2}
     for model_name in ['vqvae', 'transformer', 'convlstm']:
-        cfg[model_name]['batch_size'] = {'train': 1, 'test': 1}
         cfg[model_name]['shuffle'] = {'train': True, 'test': False}
-        cfg[model_name]['scheduler_name'] = 'ReduceLROnPlateau'
-        cfg[model_name]['factor'] = 0.5
-        cfg[model_name]['patience'] = 10
-        cfg[model_name]['threshold'] = 1.0e-4
-        cfg[model_name]['min_lr'] = 1.0e-5
         if model_name in ['vqvae']:
+            cfg[model_name]['batch_size'] = {'train': 1, 'test': 1}
             cfg[model_name]['lr'] = 1e-3
             cfg[model_name]['optimizer_name'] = 'Adam'
             cfg[model_name]['weight_decay'] = 5e-4
+            cfg[model_name]['scheduler_name'] = 'ReduceLROnPlateau'
+            cfg[model_name]['factor'] = 0.5
+            cfg[model_name]['patience'] = 10
+            cfg[model_name]['threshold'] = 1e-4
+            cfg[model_name]['min_lr'] = 1e-5
             cfg[model_name]['num_epochs'] = 200
         elif model_name in ['transformer']:
+            cfg[model_name]['batch_size'] = {'train': 1, 'test': 1}
             cfg[model_name]['lr'] = 1e-3
             cfg[model_name]['optimizer_name'] = 'Adam'
             cfg[model_name]['weight_decay'] = 5e-4
+            cfg[model_name]['scheduler_name'] = 'ReduceLROnPlateau'
+            cfg[model_name]['factor'] = 0.5
+            cfg[model_name]['patience'] = 10
+            cfg[model_name]['threshold'] = 1e-4
+            cfg[model_name]['min_lr'] = 1e-5
             cfg[model_name]['num_epochs'] = 200
         elif model_name in ['convlstm']:
+            cfg[model_name]['batch_size'] = {'train': 1, 'test': 1}
             cfg[model_name]['lr'] = 1e-3
             cfg[model_name]['optimizer_name'] = 'Adam'
             cfg[model_name]['weight_decay'] = 5e-4
+            cfg[model_name]['scheduler_name'] = 'ReduceLROnPlateau'
+            cfg[model_name]['factor'] = 0.5
+            cfg[model_name]['patience'] = 10
+            cfg[model_name]['threshold'] = 1e-4
+            cfg[model_name]['min_lr'] = 1e-5
             cfg[model_name]['num_epochs'] = 200
         else:
             raise ValueError('Not valid model name')

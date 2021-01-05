@@ -9,8 +9,7 @@ import torch.backends.cudnn as cudnn
 from config import cfg
 from data import fetch_dataset, make_data_loader
 from metrics import Metric
-from utils import save, to_device, process_control, process_dataset, make_optimizer, make_scheduler, resume, collate, \
-    vis
+from utils import save, to_device, process_control, process_dataset, make_optimizer, make_scheduler, resume, collate
 from logger import Logger
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -25,7 +24,8 @@ for k in cfg:
 if args['control_name']:
     cfg['control'] = {k: v for k, v in zip(cfg['control'].keys(), args['control_name'].split('_'))} \
         if args['control_name'] != 'None' else {}
-cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']]) if 'control' in cfg else ''
+cfg['control_name'] = '_'.join(
+    [cfg['control'][k] for k in cfg['control'] if cfg['control'][k]]) if 'control' in cfg else ''
 
 
 def main():
@@ -49,7 +49,7 @@ def runExperiment():
     model = eval('models.{}().to(cfg["device"])'.format(cfg['model_name']))
     optimizer = make_optimizer(model, cfg['model_name'])
     scheduler = make_scheduler(optimizer, cfg['model_name'])
-    metric = Metric({'train': ['Loss'], 'test': ['Loss', 'D_MSE', 'Physics']})
+    metric = Metric({'train': ['Loss', 'MSE'], 'test': ['Loss', 'MSE', 'D_MSE', 'Physics']})
     if cfg['resume_mode'] == 1:
         last_epoch, model, optimizer, scheduler, logger = resume(model, cfg['model_tag'], optimizer, scheduler)
     else:

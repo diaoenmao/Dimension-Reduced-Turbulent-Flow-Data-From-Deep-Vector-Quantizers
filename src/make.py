@@ -3,7 +3,7 @@ import itertools
 
 parser = argparse.ArgumentParser(description='Config')
 parser.add_argument('--run', default='train', type=str)
-parser.add_argument('--num_gpu', default=4, type=int)
+parser.add_argument('--num_gpus', default=4, type=int)
 parser.add_argument('--world_size', default=1, type=int)
 parser.add_argument('--init_seed', default=0, type=int)
 parser.add_argument('--round', default=4, type=int)
@@ -29,7 +29,7 @@ def make_controls(script_name, data_names, model_names, init_seeds, world_size, 
 
 def main():
     run = args['run']
-    num_gpu = args['num_gpu']
+    num_gpus = args['num_gpus']
     world_size = args['world_size']
     round = args['round']
     experiment_step = args['experiment_step']
@@ -38,8 +38,8 @@ def main():
     resume_mode = args['resume_mode']
     model = args['model']
     file = args['file'] if args['file'] is not None else model
-    gpu_ids = [','.join(str(i) for i in list(range(x, x + world_size))) for x in list(range(0, num_gpu, world_size))]
-    script_name = [['{}_{}.py'.format(run, file)]]
+    gpu_ids = [','.join(str(i) for i in list(range(x, x + world_size))) for x in list(range(0, num_gpus, world_size))]
+    script_name = [['{}.py'.format(run)]] if run in ['encode'] else [['{}_{}.py'.format(run, file)]]
     init_seeds = [list(range(init_seed, init_seed + num_experiments, experiment_step))]
     world_size = [[world_size]]
     num_experiments = [[experiment_step]]
@@ -48,7 +48,14 @@ def main():
         filename = '{}_{}'.format(run, model)
         model_names = [[model]]
         data_names = [['Turb']]
-        control_name = [[['3'], ['exact-physics'], ['0-0', '0.01-0', '0-0.0001', '0.01-0.0001']]]
+        control_name = [[['2', '3'], ['exact-physics'], ['0-0', '0.1-0', '0-0.0001', '0.1-0.0001']]]
+        controls = make_controls(script_name, data_names, model_names, init_seeds, world_size, num_experiments,
+                                 resume_mode, control_name)
+    elif model in ['transformer', 'convlstm']:
+        filename = '{}_{}'.format(run, model)
+        model_names = [[model]]
+        data_names = [['Turb']]
+        control_name = [[['2', '3'], ['exact-physics'], ['0-0', '0.1-0', '0-0.0001', '0.1-0.0001'], ['4-4']]]
         controls = make_controls(script_name, data_names, model_names, init_seeds, world_size, num_experiments,
                                  resume_mode, control_name)
     else:
