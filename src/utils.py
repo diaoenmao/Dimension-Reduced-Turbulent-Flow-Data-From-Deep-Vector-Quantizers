@@ -340,10 +340,11 @@ def Compute_VG_Statistics(List_VG):
     
     """
     # check their shape
-    Ng = 128
+    Ng = List_VG[0].shape[-1]
+    
     for item in List_VG:
-        assert item.shape == (Ng, Ng, Ng), f'"""\n input.shape is {item.shape}\n""" but not {(128, 128, 128)}'
-
+        assert item.shape == (Ng, Ng, Ng), f'"""\n input.shape is {item.shape}\n""" but not {(Ng, Ng, Ng)}'
+    
     ############# 3d
     A_3d = np.empty((Ng ** 3, 3, 3))
     A_3d[:, 0, 0] = List_VG[0].reshape(-1)
@@ -398,16 +399,14 @@ def K2_modified(Ng=128):
     return np.where(K2 == 0, 1, K2).astype(float)
 
 
-K2_m = K2_modified()
-
-
 def filtering_Gaussian(Phy_Sig, factor_I_L=[1e-16, 1 / 4, 1 / 2][0], \
-                       K2_m=K2_m, Coef_Gauss_Filter=0.5, Ng=128, eta=1.46 / 55.8, L=1.48):
+                       Coef_Gauss_Filter=0.5, eta=1.46 / 55.8, L=1.48):
     """
     Input: Signal, filter width ([1e-16: no fliter , 1/4: inertial scales , 1/2: large scales])
     Ouput: Filtered Signal, MSE between the input and filtered input
     """
-
+    Ng=Phy_Sig.shape[-1]
+    K2_m = K2_modified(Ng)
     cut_off_freq = (2 * np.pi / (factor_I_L * L))  # 1*(0.1)*(factor_I_L)/(eta)    
 
     Gaussina_LPF = np.exp(-Coef_Gauss_Filter * K2_m / (cut_off_freq ** 2))
@@ -476,7 +475,28 @@ def Filtered_VG(List_VG):
     return Filtered_Dict
 
 
-def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
+def vis(input, output, path, model_evaluation = None, i_d_min=5, fontsize=10, num_bins=1500):
+    
+    Plt_uvw = True
+    Plt_vg = True
+    Plt_EnergySpectrum = True
+    Plt_UVW_Summary = True
+    Plt_RQ_filter = True
+    Plt_VG_filter_SummaryStatistics = True
+    Plt_VG_filter_PDF_all = True
+    Plt_VG_filter_PDF_LongTransverse = True
+    U_V_W_Evaluation_summary = True
+    
+    num_bins_VG_PDF = 100
+    num_bins_UVW_PDF = 200
+    num_bins_RQ_PDF = 12
+    lev = np.array([1e-1 * 0.001, 1e-2 * 0.001, 1e-3 * 0.001, 1e-4 * 0.001])[::-1]
+    extend = 10
+    O_color = 'blue'
+    R_color = 'red'
+    camp = 'viridis'  # 'hot'
+    
+    
     from matplotlib.pyplot import contour, contourf
     import scipy.stats as stats
 
@@ -484,103 +504,131 @@ def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
     input_duvw = input['duvw'].cpu().numpy()
     output_uvw = output['uvw'].cpu().numpy()
     output_duvw = output['duvw'].cpu().numpy()
+    
+    if model_evaluation:  
+        title = 'model_evaluation'
+        x_st = 0.1
+        y_st = 1.75
+        step = 0.3
+        fontsize_text = 18
+        fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(7, 6))
 
-    j_d_min, j_d_max = 0, 128
-    k_d_min, k_d_max = 0, 128
-    label = ['U', 'V', 'W']
-    fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(10, 10))
-    xx = np.linspace(-5, 5, 1000)
-    yy = np.log10(stats.norm.pdf(xx, 0, 1))
-    for i in range(3):
-        plt.colorbar(ax[i][0].imshow(input_uvw[0, i, i_d_min:(i_d_min + 1), j_d_min:j_d_max,
-                                     k_d_min:k_d_max].squeeze()), ax=ax[i][0], fraction=0.046, pad=0.04)
-        plt.colorbar(ax[i][1].imshow(output_uvw[0, i, i_d_min:(i_d_min + 1), j_d_min:j_d_max,
-                                     k_d_min:k_d_max].squeeze()), ax=ax[i][1], fraction=0.046, pad=0.04)
-        ax[i][0].set_title('Original {}'.format(label[i]), fontsize=fontsize)
-        ax[i][1].set_title('Reconstructed {}'.format(label[i]), fontsize=fontsize)
-        x, y = Compute_1D_PDF(input_uvw[0, i, :, :, :], num_bins=num_bins)
+            
+        axes.scatter([0, 1], [2, 0], color='w')
+        for i, item in enumerate(model_evaluation):            
+            axes.text(x_st, y_st - i*step, item+'= %.2e' % model_evaluation[item], fontsize=fontsize_text)
+            
+        axes.axes.xaxis.set_visible(False)
+        axes.axes.yaxis.set_visible(False)
+        axes.set_title("%s" % (title), fontsize=fontsize_text)                
 
-        ax[i][2].plot(x, y, 'b', lw=2, label='Original {}'.format(label[i]))
-        x, y = Compute_1D_PDF(output_uvw[0, i, :, :, :], num_bins=num_bins)
+        plt.tight_layout()
+        makedir_exist_ok(path)
+        fig.savefig('{}/Model_Evluation_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300,
+                        bbox_inches='tight', fontsize=fontsize)
+        plt.close()
 
-        ax[i][2].plot(x, y, 'g', lw=2, label='Reconstructed {}'.format(label[i]))
-        ax[i][2].set_xlim(-10, 10)
-        ax[i][2].set_ylim(-5, 0)
-        ax[i][2].set_xlabel('Normalized {}'.format(label[i]), fontsize=fontsize)
-        ax[i][2].set_ylabel('log10(pdf)', fontsize=fontsize)
-        ax[i][2].set_title('MSE = {:.4f}'.format(np.mean((output_uvw[:, i, :, :, :] - input_uvw[:, i, :, :, :]) ** 2)),
-                           fontsize=fontsize)
-        ax[i][2].grid(True)
+    
+    
+    if Plt_uvw:
+        j_d_min, j_d_max = 0, 128
+        k_d_min, k_d_max = 0, 128
+        label = ['U', 'V', 'W']
+        fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(10, 10))
+        xx = np.linspace(-5, 5, 1000)
+        yy = np.log10(stats.norm.pdf(xx, 0, 1))
+        for i in range(3):
+            plt.colorbar(ax[i][0].imshow(input_uvw[0, i, i_d_min:(i_d_min + 1), j_d_min:j_d_max,
+                                         k_d_min:k_d_max].squeeze()), ax=ax[i][0], fraction=0.046, pad=0.04)
+            plt.colorbar(ax[i][1].imshow(output_uvw[0, i, i_d_min:(i_d_min + 1), j_d_min:j_d_max,
+                                         k_d_min:k_d_max].squeeze()), ax=ax[i][1], fraction=0.046, pad=0.04)
+            ax[i][0].set_title('Original {}'.format(label[i]), fontsize=fontsize)
+            ax[i][1].set_title('Reconstructed {}'.format(label[i]), fontsize=fontsize)
+            x, y = Compute_1D_PDF(input_uvw[0, i, :, :, :], num_bins=num_bins_UVW_PDF)
 
-        ax[i][2].plot(xx, yy, 'r--', label="Gaussian")
-        ax[i][2].legend(fontsize=fontsize)
-    plt.tight_layout()
-    makedir_exist_ok(path)
-    fig.savefig('{}/uvw_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
-                fontsize=fontsize)
-    plt.close()
-    label = [['dUdx', 'dUdy', 'dUdz'], ['dVdx', 'dVdy', 'dVdz'], ['dWdx', 'dWdy', 'dWdz']]
-    fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(20, 25))
-    fontsize = 15
-    for i in range(3):
-        for j in range(3):
-            x, y = Compute_1D_PDF(input_duvw[:, i, j, :, :, :], num_bins=num_bins)
+            ax[i][2].plot(x, y, 'b', lw=2, label='Original {}'.format(label[i]))
+            x, y = Compute_1D_PDF(output_uvw[0, i, :, :, :], num_bins=num_bins_UVW_PDF)
 
-            ax[i][j].plot(x, y, 'g', lw=2, label='Original {}'.format(label[i][j]))
-            x, y = Compute_1D_PDF(output_duvw[:, i, j, :, :, :], num_bins=num_bins)
+            ax[i][2].plot(x, y, 'g', lw=2, label='Reconstructed {}'.format(label[i]))
+            ax[i][2].set_xlim(-10, 10)
+            ax[i][2].set_ylim(-5, 0)
+            ax[i][2].set_xlabel('Normalized {}'.format(label[i]), fontsize=fontsize)
+            ax[i][2].set_ylabel('log10(pdf)', fontsize=fontsize)
+            ax[i][2].set_title('MSE = {:.4f}'.format(np.mean((output_uvw[:, i, :, :, :] - input_uvw[:, i, :, :, :]) ** 2)),
+                               fontsize=fontsize)
+            ax[i][2].grid(True)
 
-            ax[i][j].plot(x, y, 'b', lw=2, label='Reconstructed {}'.format(label[i][j]))
-            ax[i][j].set_title('MSE = {:.4f}'.format(np.mean((output_duvw[:, i, j, :, :, :] -
-                                                              input_duvw[:, i, j, :, :, :]) ** 2)), fontsize=fontsize)
-            ax[i][j].set_xlim(-10, 10)
-            ax[i][j].set_ylim(-5, 0)
-            ax[i][j].set_xlabel('Normalized {}'.format(label[i][j]), fontsize=fontsize)
-            ax[i][j].set_ylabel('log10(PDF)', fontsize=fontsize)
-            ax[i][j].grid(True)
+            ax[i][2].plot(xx, yy, 'r--', label="Gaussian")
+            ax[i][2].legend(fontsize=fontsize)
+        plt.tight_layout()
+        makedir_exist_ok(path)
+        fig.savefig('{}/uvw_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
+                    fontsize=fontsize)
+        plt.close()
+    
+    if Plt_vg:
+        label = [['dUdx', 'dUdy', 'dUdz'], ['dVdx', 'dVdy', 'dVdz'], ['dWdx', 'dWdy', 'dWdz']]
+        fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(20, 25))
+        fontsize = 15
+        for i in range(3):
+            for j in range(3):
+                x, y = Compute_1D_PDF(input_duvw[:, i, j, :, :, :], num_bins=num_bins_VG_PDF)
 
-            ax[i][j].plot(xx, yy, 'r--', label="Gaussian")
-            ax[i][j].legend(fontsize=fontsize)
-    plt.tight_layout()
-    makedir_exist_ok(path)
-    fig.savefig('{}/vg_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
-                fontsize=fontsize)
-    plt.close()
+                ax[i][j].plot(x, y, 'g', lw=2, label='Original {}'.format(label[i][j]))
+                x, y = Compute_1D_PDF(output_duvw[:, i, j, :, :, :], num_bins=num_bins_VG_PDF)
 
-    Ng = 128
+                ax[i][j].plot(x, y, 'b', lw=2, label='Reconstructed {}'.format(label[i][j]))
+                ax[i][j].set_title('MSE = {:.4f}'.format(np.mean((output_duvw[:, i, j, :, :, :] -
+                                                                  input_duvw[:, i, j, :, :, :]) ** 2)), fontsize=fontsize)
+                ax[i][j].set_xlim(-10, 10)
+                ax[i][j].set_ylim(-5, 0)
+                ax[i][j].set_xlabel('Normalized {}'.format(label[i][j]), fontsize=fontsize)
+                ax[i][j].set_ylabel('log10(PDF)', fontsize=fontsize)
+                ax[i][j].grid(True)
+
+                ax[i][j].plot(xx, yy, 'r--', label="Gaussian")
+                ax[i][j].legend(fontsize=fontsize)
+        plt.tight_layout()
+        makedir_exist_ok(path)
+        fig.savefig('{}/vg_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
+                    fontsize=fontsize)
+        plt.close()
+
+    Ng = input_uvw.shape[-1]
     # Velocity field Statistics
 
     Energy_k_Original = Compute_V_Statistics(input_uvw[0, 0, :, :, :], input_uvw[0, 1, :, :, :],
-                                             input_uvw[0, 2, :, :, :])
+                                             input_uvw[0, 2, :, :, :], Ng = input_uvw.shape[-1])
     Energy_k_Reconstructed = Compute_V_Statistics(output_uvw[0, 0, :, :, :], output_uvw[0, 1, :, :, :],
-                                                  output_uvw[0, 2, :, :, :])
+                                                  output_uvw[0, 2, :, :, :], Ng = input_uvw.shape[-1])
+    if Plt_EnergySpectrum:
+        # Plot Energy Spectrum
+        O_color = 'blue'
+        R_color = 'red'
+        title = ['Original', 'Reconstructed']
+        fontsize_text = 18
+        fig = plt.figure(figsize=(8, 6))
+        fontsize_label = 20
+        xx = np.arange(Ng)
+        plt.plot(xx, Energy_k_Original, color=O_color, label=title[0])
+        plt.plot(xx, Energy_k_Reconstructed, color=R_color, linestyle='--', label=title[1])
+        plt.plot(xx[1:], (xx[1:] ** (-5 / 3)), color='k', label='$K^{(-5/3)}$')
+        plt.legend(fontsize=fontsize_text)
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.ylim([1e-6, 10])
+        plt.xlabel(r"$k$", fontsize=fontsize_label)
+        plt.ylabel(r"$E(k)$", fontsize=fontsize_label)
+        plt.xticks(fontsize=fontsize_label)
+        plt.yticks(fontsize=fontsize_label)
+        plt.grid()
 
-    # Plot Energy Spectrum
-    O_color = 'blue'
-    R_color = 'red'
-    title = ['Original', 'Reconstructed']
-    fontsize_text = 18
-    fig = plt.figure(figsize=(8, 6))
-    fontsize_label = 20
-    xx = np.arange(Ng)
-    plt.plot(xx, Energy_k_Original, color=O_color, label=title[0])
-    plt.plot(xx, Energy_k_Reconstructed, color=R_color, linestyle='--', label=title[1])
-    plt.plot(xx[1:], (xx[1:] ** (-5 / 3)), color='k', label='$K^{(-5/3)}$')
-    plt.legend(fontsize=fontsize_text)
-    plt.yscale('log')
-    plt.xscale('log')
-    plt.ylim([1e-6, 10])
-    plt.xlabel(r"$k$", fontsize=fontsize_label)
-    plt.ylabel(r"$E(k)$", fontsize=fontsize_label)
-    plt.xticks(fontsize=fontsize_label)
-    plt.yticks(fontsize=fontsize_label)
-    plt.grid()
-
-    plt.tight_layout()
-    makedir_exist_ok(path)
-    fig.savefig('{}/EnergySpectrum_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300,
-                bbox_inches='tight',
-                fontsize=fontsize)
-    plt.close()
+        plt.tight_layout()
+        makedir_exist_ok(path)
+        fig.savefig('{}/EnergySpectrum_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300,
+                    bbox_inches='tight',
+                    fontsize=fontsize)
+        plt.close()
 
     # Velocity Gradient Statistics
     VG_Stat_Original = VG_Stat_Recons = {}
@@ -592,135 +640,104 @@ def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
         [output_duvw[0, 0, 0, :, :, :], output_duvw[0, 0, 1, :, :, :], output_duvw[0, 0, 2, :, :, :], \
          output_duvw[0, 1, 0, :, :, :], output_duvw[0, 1, 1, :, :, :], output_duvw[0, 1, 2, :, :, :], \
          output_duvw[0, 2, 0, :, :, :], output_duvw[0, 2, 1, :, :, :], output_duvw[0, 2, 2, :, :, :]])
-    # plot R-Q
-    lev = np.array([1e-1 * 0.001, 1e-2 * 0.001, 1e-3 * 0.001, 1e-4 * 0.001])[::-1]
-    extend = 6
-    O_color = 'blue'
-    R_color = 'red'
-    camp = 'viridis'  # 'hot'
-
-    fig = plt.figure(figsize=(12, 8))
-
-    X_M, Y_M, H = Compute_2D_PDF(VG_Stat_Original['R'], VG_Stat_Original['Q'])
-    SijSij_mean_t = np.mean(VG_Stat_Original['S_ijS_ij'])
-
-    contours = contour(X_M / SijSij_mean_t ** (3 / 2), Y_M / SijSij_mean_t, H, levels=lev, \
-                       origin='lower', colors=4 * (O_color,), linewidths=1, linestyles='solid')
-    plt.clabel(contours, inline=True, fmt='%.9f', fontsize=14)
-
-    X_M, Y_M, H = Compute_2D_PDF(VG_Stat_Recons['R'], VG_Stat_Recons['Q'])
-    SijSij_mean_t = np.mean(VG_Stat_Recons['S_ijS_ij'])
-
-    contours = contour(X_M / SijSij_mean_t ** (3 / 2), Y_M / SijSij_mean_t, H, levels=lev, \
-                       origin='lower', colors=4 * (R_color,), linewidths=3, linestyles='--')
-    plt.clabel(contours, inline=True, fmt='%.9f', fontsize=14)
-
-    Rx = np.arange(-10, 10, 0.1)
-    plt.plot(Rx, -((27 / 4) * Rx ** 2) ** (1 / 3), 'k-', label='$Q=-(27R^2/4)^{1/3}$')
-    plt.legend(fontsize=15)
-
-    plt.xlabel(r"$R/(S_{ij}S_{ij})^{(3/2)}}$", fontsize=fontsize_label)
-    plt.ylabel(r"$Q/S_{ij}S_{ij}$", fontsize=fontsize_label)
-    plt.xlim([-extend, extend])
-    plt.ylim([-extend, extend])
-    plt.grid()
-
-    plt.tight_layout()
-    makedir_exist_ok(path)
-    fig.savefig('{}/RQ_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300, bbox_inches='tight',
-                fontsize=fontsize)
-    plt.close()
-
-    # Plot other VG statistics
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 5))
-    x_st = 0.1
-    y_st = 1.75
-    step = 0.3
-    fontsize_text = 18
-    title = ['Original', 'Reconstructed']
-    i = 0
-    for dic in [VG_Stat_Original, VG_Stat_Recons]:
-        axes[i].scatter([0, 1], [2, 0], color='w')
-        axes[i].text(x_st, y_st, r'$|A_{ii}| = %.4e$' % np.mean(dic['Trace_A']), fontsize=fontsize_text)
-        axes[i].text(x_st, y_st - 1 * step, r'$|S_{ij}S_{ij}| = %.4f$' % np.mean(dic['S_ijS_ij']),
-                     fontsize=fontsize_text)
-        axes[i].text(x_st, y_st - 2 * step, r'$|R_{ij}R_{ij}| = %.4f$' % np.mean(dic['R_ijR_ij']),
-                     fontsize=fontsize_text)
-        axes[i].text(x_st, y_st - 3 * step,
-                     r'$(-3/4)*|S_{ij}\omega_i\omega_j| = %.4f$' % ((-3 / 4) * np.mean(dic['VS'])),
-                     fontsize=fontsize_text)
-        axes[i].text(x_st, y_st - 4 * step, r'$|S_{ij}S_{kj}S_{ji}| = %.4f$' % np.mean(dic['SijSkjSji']),
-                     fontsize=fontsize_text)
-
-        axes[i].axes.xaxis.set_visible(False)
-        axes[i].axes.yaxis.set_visible(False)
-        axes[i].set_title("%s" % title[i], fontsize=fontsize_text)
-
-        i += 1
-
-    plt.tight_layout()
-    makedir_exist_ok(path)
-    fig.savefig('{}/VG_SummaryStatistics_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300,
-                bbox_inches='tight',
-                fontsize=fontsize)
-    plt.close()
+        
 
     # Filtering Statistics
     Original_Filtered_Field = Filtered_Field(input_uvw[0, 0, :, :, :], input_uvw[0, 1, :, :, :],
                                              input_uvw[0, 2, :, :, :])
     Reconstructed_Filtered_Field = Filtered_Field(output_uvw[0, 0, :, :, :], output_uvw[0, 1, :, :, :],
                                                   output_uvw[0, 2, :, :, :])
-
-    ## Plot U,V,W filtered
-    j_d_min, j_d_max = 0, 128
-    k_d_min, k_d_max = 0, 128
-    i_d_min = np.random.randint(0, Ng)  # let's keep it random and not stick to a specific cross-section
-    xx = np.linspace(-5, 5, 1000)
-    yy = np.log10(stats.norm.pdf(xx, 0, 1))
-
-    for Vel_comp in ['U', 'V', 'W']:
-        fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(20, 20))
+    
+    if U_V_W_Evaluation_summary:
+        from metrics import Metric
+        
+        fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(12, 4))
+        
+        
         for i, name in zip(range(3), ['_NoFilter', '_InertialScales', '_LargeScales']):
-            plt.colorbar(ax[0][i].imshow(
-                Original_Filtered_Field[Vel_comp + name][0][i_d_min:(i_d_min + 1), j_d_min:j_d_max,
-                k_d_min:k_d_max].squeeze()), ax=ax[0][i], fraction=0.046, pad=0.04)
-            plt.colorbar(ax[1][i].imshow(
-                Reconstructed_Filtered_Field[Vel_comp + name][0][i_d_min:(i_d_min + 1), j_d_min:j_d_max,
-                k_d_min:k_d_max].squeeze()), ax=ax[1][i], fraction=0.046, pad=0.04)
+            metric = Metric({'test': ['MSE', 'PSNR', 'MAE', 'MSSIM']})
+            input_uvw_dic = {}
+            output_uvw_dic = {}
+            input_uvw_dic['uvw'] = torch.from_numpy(np.stack([Original_Filtered_Field['U' + name][0], \
+                                         Original_Filtered_Field['V' + name][0], \
+                                         Original_Filtered_Field['W' + name][0]], axis = 0)).unsqueeze(0)
+            output_uvw_dic['uvw'] = torch.from_numpy(np.stack([Reconstructed_Filtered_Field['U' + name][0],\
+                                          Reconstructed_Filtered_Field['V' + name][0], \
+                                          Reconstructed_Filtered_Field['W' + name][0]] , axis = 0)).unsqueeze(0)            
+            evaluation = metric.evaluate(metric.metric_name['test'], input_uvw_dic, output_uvw_dic)
+            title = 'model_evaluation' + name
+            x_st = 0.1
+            y_st = 1.75
+            step = 0.3
+            fontsize_text = 12            
 
-            ax[0][i].set_title('{} Original{}'.format(Vel_comp, name) \
-                                   if i == 0 else \
-                                   '{} Original{} , MSE = {:.4f}'. \
-                               format(Vel_comp, name, Original_Filtered_Field[Vel_comp + name][1]), fontsize=fontsize)
-            ax[1][i].set_title('{} Reconstructed{}'.format(Vel_comp, name) \
-                                   if i == 0 else \
-                                   '{} Reconstructed{} , MSE = {:.4f}'. \
-                               format(Vel_comp, name, Reconstructed_Filtered_Field[Vel_comp + name][1]),
-                               fontsize=fontsize)
+            ax[i].scatter([0, 1], [2, 0], color='w')
+            for ii, item in enumerate(evaluation):            
+                ax[i].text(x_st, y_st - ii*step, item+'= %.4e' % evaluation[item], fontsize=fontsize_text)
+            ax[i].axes.xaxis.set_visible(False)
+            ax[i].axes.yaxis.set_visible(False)
+            ax[i].set_title("%s" % (title), fontsize=fontsize_text)                
 
-            x, y = Compute_1D_PDF(Original_Filtered_Field[Vel_comp + name][0], num_bins=num_bins)
-
-            ax[2][i].plot(x, y, 'b', lw=2, label='{} Original{}'.format(Vel_comp, name))
-            x, y = Compute_1D_PDF(Reconstructed_Filtered_Field[Vel_comp + name][0], num_bins=num_bins)
-
-            ax[2][i].plot(x, y, 'g', lw=2, label='{} Reconstructed{}'.format(Vel_comp, name))
-            ax[2][i].set_xlim(-10, 10)
-            ax[2][i].set_ylim(-5, 0)
-            ax[2][i].set_xlabel('Normalized {}'.format(Vel_comp), fontsize=fontsize)
-            ax[2][i].set_ylabel('log10(pdf)', fontsize=fontsize)
-            ax[2][i].set_title('MSE = {:.4f}'.format(np.mean(
-                (Reconstructed_Filtered_Field[Vel_comp + name][0] - Original_Filtered_Field[Vel_comp + name][0]) ** 2)),
-                fontsize=fontsize)
-            ax[2][i].grid(True)
-
-            ax[2][i].plot(xx, yy, 'r--', label="Gaussian")
-            ax[2][i].legend(fontsize=fontsize)
         plt.tight_layout()
-        fig.savefig('{}/{}_Summary_{}.{}'.format(path, Vel_comp, cfg['model_tag'], cfg['fig_format']), dpi=300,
-                    bbox_inches='tight',
-                    fontsize=fontsize)
-
+        makedir_exist_ok(path)
+        fig.savefig('{}/U_V_W_Evaluation_summary_{}.{}'.format(path, cfg['model_tag'], cfg['fig_format']), dpi=300,
+                            bbox_inches='tight', fontsize=fontsize)
         plt.close()
+            
+         
+            
+            
+    if Plt_UVW_Summary:
+        ## Plot U,V,W filtered
+        j_d_min, j_d_max = 0, 128
+        k_d_min, k_d_max = 0, 128
+        i_d_min = np.random.randint(0, Ng)  # let's keep it random and not stick to a specific cross-section
+        xx = np.linspace(-5, 5, 1000)
+        yy = np.log10(stats.norm.pdf(xx, 0, 1))
+
+        for Vel_comp in ['U', 'V', 'W']:
+            fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(20, 20))
+            for i, name in zip(range(3), ['_NoFilter', '_InertialScales', '_LargeScales']):
+                plt.colorbar(ax[0][i].imshow(
+                    Original_Filtered_Field[Vel_comp + name][0][i_d_min:(i_d_min + 1), j_d_min:j_d_max,
+                    k_d_min:k_d_max].squeeze()), ax=ax[0][i], fraction=0.046, pad=0.04)
+                plt.colorbar(ax[1][i].imshow(
+                    Reconstructed_Filtered_Field[Vel_comp + name][0][i_d_min:(i_d_min + 1), j_d_min:j_d_max,
+                    k_d_min:k_d_max].squeeze()), ax=ax[1][i], fraction=0.046, pad=0.04)
+
+                ax[0][i].set_title('{} Original{}'.format(Vel_comp, name) \
+                                       if i == 0 else \
+                                       '{} Original{} , MSE = {:.4f}'. \
+                                   format(Vel_comp, name, Original_Filtered_Field[Vel_comp + name][1]), fontsize=fontsize)
+                ax[1][i].set_title('{} Reconstructed{}'.format(Vel_comp, name) \
+                                       if i == 0 else \
+                                       '{} Reconstructed{} , MSE = {:.4f}'. \
+                                   format(Vel_comp, name, Reconstructed_Filtered_Field[Vel_comp + name][1]),
+                                   fontsize=fontsize)
+
+                x, y = Compute_1D_PDF(Original_Filtered_Field[Vel_comp + name][0], num_bins=num_bins_UVW_PDF)
+
+                ax[2][i].plot(x, y, 'b', lw=2, label='{} Original{}'.format(Vel_comp, name))
+                x, y = Compute_1D_PDF(Reconstructed_Filtered_Field[Vel_comp + name][0], num_bins=num_bins_UVW_PDF)
+
+                ax[2][i].plot(x, y, 'g', lw=2, label='{} Reconstructed{}'.format(Vel_comp, name))
+                ax[2][i].set_xlim(-10, 10)
+                ax[2][i].set_ylim(-5, 0)
+                ax[2][i].set_xlabel('Normalized {}'.format(Vel_comp), fontsize=fontsize)
+                ax[2][i].set_ylabel('log10(pdf)', fontsize=fontsize)
+                ax[2][i].set_title('MSE = {:.4f}'.format(np.mean(
+                    (Reconstructed_Filtered_Field[Vel_comp + name][0] - Original_Filtered_Field[Vel_comp + name][0]) ** 2)),
+                    fontsize=fontsize)
+                ax[2][i].grid(True)
+
+                ax[2][i].plot(xx, yy, 'r--', label="Gaussian")
+                ax[2][i].legend(fontsize=fontsize)
+            plt.tight_layout()
+            fig.savefig('{}/{}_Summary_{}.{}'.format(path, Vel_comp, cfg['model_tag'], cfg['fig_format']), dpi=300,
+                        bbox_inches='tight',
+                        fontsize=fontsize)
+
+            plt.close()
 
     ## plot R-Q filtered
     Original_Filtered_VG_Field = Filtered_VG(
@@ -732,109 +749,183 @@ def vis(input, output, path, i_d_min=5, fontsize=10, num_bins=1500):
          output_duvw[0, 1, 0, :, :, :], output_duvw[0, 1, 1, :, :, :], output_duvw[0, 1, 2, :, :, :], \
          output_duvw[0, 2, 0, :, :, :], output_duvw[0, 2, 1, :, :, :], output_duvw[0, 2, 2, :, :, :]])
 
-    ### 
-    for Scale in ['_NoFilter', '_InertialScales', '_LargeScales']:
-        fig = plt.figure(figsize=(12, 8))
-        X_M, Y_M, H = Compute_2D_PDF(Original_Filtered_VG_Field['R' + Scale], Original_Filtered_VG_Field['Q' + Scale])
-        SijSij_mean_t = np.mean(Original_Filtered_VG_Field['S_ijS_ij' + Scale])
+    ###
+    if Plt_RQ_filter:
+        for Scale in ['_NoFilter', '_InertialScales', '_LargeScales']:
+            fig = plt.figure(figsize=(12, 8))
+            X_M, Y_M, H = Compute_2D_PDF(Original_Filtered_VG_Field['R' + Scale], Original_Filtered_VG_Field['Q' + Scale], num_bins_RQ_PDF)
+            SijSij_mean_t = np.mean(Original_Filtered_VG_Field['S_ijS_ij' + Scale])
 
-        contours = contour(X_M / SijSij_mean_t ** (3 / 2), Y_M / SijSij_mean_t, H, levels=lev, \
-                           origin='lower', colors=4 * (O_color,), linewidths=1, linestyles='solid')
+            contours = contour(X_M / SijSij_mean_t ** (3 / 2), Y_M / SijSij_mean_t, H, levels=lev, \
+                               origin='lower', colors=4 * (O_color,), linewidths=1, linestyles='solid')
 
-        X_M, Y_M, H = Compute_2D_PDF(Reconstructed_Filtered_VG_Field['R' + Scale],
-                                     Reconstructed_Filtered_VG_Field['Q' + Scale])
-        SijSij_mean_t = np.mean(Reconstructed_Filtered_VG_Field['S_ijS_ij' + Scale])
+            X_M, Y_M, H = Compute_2D_PDF(Reconstructed_Filtered_VG_Field['R' + Scale],
+                                         Reconstructed_Filtered_VG_Field['Q' + Scale], num_bins_RQ_PDF)
+            SijSij_mean_t = np.mean(Reconstructed_Filtered_VG_Field['S_ijS_ij' + Scale])
 
-        contours = contour(X_M / SijSij_mean_t ** (3 / 2), Y_M / SijSij_mean_t, H, levels=lev, \
-                           origin='lower', colors=4 * (R_color,), linewidths=3, linestyles='--')
+            contours = contour(X_M / SijSij_mean_t ** (3 / 2), Y_M / SijSij_mean_t, H, levels=lev, \
+                               origin='lower', colors=4 * (R_color,), linewidths=3, linestyles='--')
 
-        Rx = np.arange(-10, 10, 0.1)
-        plt.plot(Rx, -((27 / 4) * Rx ** 2) ** (1 / 3), 'k-', label='$Q=-(27R^2/4)^{1/3}$')
-        plt.legend(fontsize=15)
+            Rx = np.arange(-10, 10, 0.1)
+            plt.plot(Rx, -((27 / 4) * Rx ** 2) ** (1 / 3), 'k-', label='$Q=-(27R^2/4)^{1/3}$')
+            plt.legend(fontsize=15)
 
-        plt.xlabel(r"$R/(S_{ij}S_{ij})^{(3/2)}}$", fontsize=fontsize_label)
-        plt.ylabel(r"$Q/S_{ij}S_{ij}$", fontsize=fontsize_label)
-        plt.xlim([-extend, extend])
-        plt.ylim([-extend, extend])
-        plt.grid()
-        plt.title("R-Q" + Scale)
-        plt.tight_layout()
-        makedir_exist_ok(path)
-        fig.savefig('{}/RQ{}_{}.{}'.format(path, Scale, cfg['model_tag'], cfg['fig_format']), dpi=300,
-                    bbox_inches='tight',
-                    fontsize=fontsize)
+            plt.xlabel(r"$R/(S_{ij}S_{ij})^{(3/2)}}$", fontsize=fontsize_label)
+            plt.ylabel(r"$Q/S_{ij}S_{ij}$", fontsize=fontsize_label)
+            plt.xlim([-extend, extend])
+            plt.ylim([-extend, extend])
+            plt.grid()
+            plt.title("R-Q" + Scale)
+            plt.tight_layout()
+            makedir_exist_ok(path)
+            fig.savefig('{}/RQ{}_{}.{}'.format(path, Scale, cfg['model_tag'], cfg['fig_format']), dpi=300,
+                        bbox_inches='tight',
+                        fontsize=fontsize)
 
-        plt.close()
+            plt.close()
+    
+    if Plt_VG_filter_SummaryStatistics:
+        #### Plot other Filtered VG statistics
+        x_st = 0.1
+        y_st = 1.75
+        step = 0.3
+        fontsize_text = 18
+        title = ['Original', 'Reconstructed']
+        for Scale in ['_NoFilter', '_InertialScales', '_LargeScales']:
+            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 5))
 
-    #### Plot other Filtered VG statistics
-    x_st = 0.1
-    y_st = 1.75
-    step = 0.3
-    fontsize_text = 18
-    title = ['Original', 'Reconstructed']
-    for Scale in ['_NoFilter', '_InertialScales', '_LargeScales']:
-        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 5))
+            i = 0
+            for dic in [Original_Filtered_VG_Field, Reconstructed_Filtered_VG_Field]:
+                axes[i].scatter([0, 1], [2, 0], color='w')
+                axes[i].text(x_st, y_st, r'$|A_{ii}| = %.4e$' % np.mean(dic['Trace_A' + Scale]), fontsize=fontsize_text)
+                axes[i].text(x_st, y_st - 1 * step, r'$|S_{ij}S_{ij}| = %.4f$' % np.mean(dic['S_ijS_ij' + Scale]),
+                             fontsize=fontsize_text)
+                axes[i].text(x_st, y_st - 2 * step, r'$|R_{ij}R_{ij}| = %.4f$' % np.mean(dic['R_ijR_ij' + Scale]),
+                             fontsize=fontsize_text)
+                axes[i].text(x_st, y_st - 3 * step,
+                             r'$(-3/4)*|S_{ij}\omega_i\omega_j| = %.4f$' % ((-3 / 4) * np.mean(dic['VS' + Scale])),
+                             fontsize=fontsize_text)
+                axes[i].text(x_st, y_st - 4 * step, r'$|S_{ij}S_{kj}S_{ji}| = %.4f$' % np.mean(dic['SijSkjSji' + Scale]),
+                             fontsize=fontsize_text)
 
-        i = 0
-        for dic in [Original_Filtered_VG_Field, Reconstructed_Filtered_VG_Field]:
-            axes[i].scatter([0, 1], [2, 0], color='w')
-            axes[i].text(x_st, y_st, r'$|A_{ii}| = %.4e$' % np.mean(dic['Trace_A' + Scale]), fontsize=fontsize_text)
-            axes[i].text(x_st, y_st - 1 * step, r'$|S_{ij}S_{ij}| = %.4f$' % np.mean(dic['S_ijS_ij' + Scale]),
-                         fontsize=fontsize_text)
-            axes[i].text(x_st, y_st - 2 * step, r'$|R_{ij}R_{ij}| = %.4f$' % np.mean(dic['R_ijR_ij' + Scale]),
-                         fontsize=fontsize_text)
-            axes[i].text(x_st, y_st - 3 * step,
-                         r'$(-3/4)*|S_{ij}\omega_i\omega_j| = %.4f$' % ((-3 / 4) * np.mean(dic['VS' + Scale])),
-                         fontsize=fontsize_text)
-            axes[i].text(x_st, y_st - 4 * step, r'$|S_{ij}S_{kj}S_{ji}| = %.4f$' % np.mean(dic['SijSkjSji' + Scale]),
-                         fontsize=fontsize_text)
+                axes[i].axes.xaxis.set_visible(False)
+                axes[i].axes.yaxis.set_visible(False)
+                axes[i].set_title("%s" % (title[i] + Scale), fontsize=fontsize_text)
 
-            axes[i].axes.xaxis.set_visible(False)
-            axes[i].axes.yaxis.set_visible(False)
-            axes[i].set_title("%s" % (title[i] + Scale), fontsize=fontsize_text)
+                i += 1
 
-            i += 1
-
-        plt.tight_layout()
-        makedir_exist_ok(path)
-        fig.savefig('{}/VG{}_SummaryStatistics_{}.{}'.format(path, Scale, cfg['model_tag'], cfg['fig_format']), dpi=300,
-                    bbox_inches='tight',
-                    fontsize=fontsize)
-        plt.close()
+            plt.tight_layout()
+            makedir_exist_ok(path)
+            fig.savefig('{}/VG{}_SummaryStatistics_{}.{}'.format(path, Scale, cfg['model_tag'], cfg['fig_format']), dpi=300,
+                        bbox_inches='tight',
+                        fontsize=fontsize)
+            plt.close()
 
     label = [['dUdx', 'dUdy', 'dUdz'], ['dVdx', 'dVdy', 'dVdz'], ['dWdx', 'dWdy', 'dWdz']]
-    for Scale in ['_NoFilter', '_InertialScales', '_LargeScales']:
-        fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(20, 25))
-        fontsize = 15
-        for i in range(3):
-            for j in range(3):
-                x, y = Compute_1D_PDF(Original_Filtered_VG_Field[label[i][j] + '_Phy' + Scale][0], num_bins=num_bins)
+    if Plt_VG_filter_PDF_all:
+        for Scale in ['_NoFilter', '_InertialScales', '_LargeScales']:
+            fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(20, 25))
+            fontsize = 15
+            for i in range(3):
+                for j in range(3):
+                    x, y = Compute_1D_PDF(Original_Filtered_VG_Field[label[i][j] + '_Phy' + Scale][0], num_bins=num_bins_VG_PDF)
 
-                ax[i][j].plot(x, y, 'g', lw=2, label='Original {}'.format(label[i][j]))
-                x, y = Compute_1D_PDF(Reconstructed_Filtered_VG_Field[label[i][j] + '_Phy' + Scale][0],
-                                      num_bins=num_bins)
+                    ax[i][j].plot(x, y, 'g', lw=2, label='Original {}'.format(label[i][j]))
+                    x, y = Compute_1D_PDF(Reconstructed_Filtered_VG_Field[label[i][j] + '_Phy' + Scale][0],num_bins=num_bins_VG_PDF)
 
-                ax[i][j].plot(x, y, 'b', lw=2, label='Reconstructed {}'.format(label[i][j]))
-                ax[i][j].set_title('{}{} MSE = {:.4f}'.format(label[i][j], Scale, \
-                                                              np.mean((Original_Filtered_VG_Field[
-                                                                           label[i][j] + '_Phy' + Scale][0] -
-                                                                       Reconstructed_Filtered_VG_Field[
-                                                                           label[i][j] + '_Phy' + Scale][0]) ** 2)),
-                                   fontsize=fontsize)
-                ax[i][j].set_xlim(-10, 10)
-                ax[i][j].set_ylim(-5, 0)
-                ax[i][j].set_xlabel('Normalized {}'.format(label[i][j]), fontsize=fontsize)
-                ax[i][j].set_ylabel('log10(PDF)', fontsize=fontsize)
-                ax[i][j].grid(True)
+                    ax[i][j].plot(x, y, 'b', lw=2, label='Reconstructed {}'.format(label[i][j]))
+                    ax[i][j].set_title('{}{} MSE = {:.4f}'.format(label[i][j], Scale, \
+                                                                  np.mean((Original_Filtered_VG_Field[
+                                                                               label[i][j] + '_Phy' + Scale][0] -
+                                                                           Reconstructed_Filtered_VG_Field[
+                                                                               label[i][j] + '_Phy' + Scale][0]) ** 2)),
+                                       fontsize=fontsize)
+                    ax[i][j].set_xlim(-10, 10)
+                    ax[i][j].set_ylim(-5, 0)
+                    ax[i][j].set_xlabel('Normalized {}'.format(label[i][j]), fontsize=fontsize)
+                    ax[i][j].set_ylabel('log10(PDF)', fontsize=fontsize)
+                    ax[i][j].grid(True)
 
-                ax[i][j].plot(xx, yy, 'r--', label="Gaussian")
-                ax[i][j].legend(fontsize=fontsize)
-        plt.tight_layout()
+                    ax[i][j].plot(xx, yy, 'r--', label="Gaussian")
+                    ax[i][j].legend(fontsize=fontsize)
+            plt.tight_layout()
 
-        makedir_exist_ok(path)
-        fig.savefig('{}/VG{}_PDF_{}.{}'.format(path, Scale, cfg['model_tag'], cfg['fig_format']), dpi=300,
-                    bbox_inches='tight',
-                    fontsize=fontsize)
-        plt.close()
+            makedir_exist_ok(path)
+            fig.savefig('{}/VG{}_PDF_{}.{}'.format(path, Scale, cfg['model_tag'], cfg['fig_format']), dpi=300,
+                        bbox_inches='tight',
+                        fontsize=fontsize)
+            plt.close()
+    if Plt_VG_filter_PDF_LongTransverse:
+        label_plot = ['$A_{ii}$','$A_{ij}$']
+        for Scale in ['_NoFilter', '_InertialScales', '_LargeScales']:
+            fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(14, 6))
+            fontsize = 15
+            
+            Original_Longitudinal = np.stack([Original_Filtered_VG_Field[label[0][0] + '_Phy' + Scale][0],\
+                                              Original_Filtered_VG_Field[label[1][1] + '_Phy' + Scale][0],\
+                                              Original_Filtered_VG_Field[label[2][2] + '_Phy' + Scale][0]], axis = 0)
+            Original_Transverse = np.stack([Original_Filtered_VG_Field[label[0][1] + '_Phy' + Scale][0],\
+                                              Original_Filtered_VG_Field[label[0][2] + '_Phy' + Scale][0],\
+                                              Original_Filtered_VG_Field[label[1][0] + '_Phy' + Scale][0],\
+                                                  Original_Filtered_VG_Field[label[1][2] + '_Phy' + Scale][0],\
+                                                  Original_Filtered_VG_Field[label[2][0] + '_Phy' + Scale][0],\
+                                                  Original_Filtered_VG_Field[label[2][1] + '_Phy' + Scale][0]], axis = 0)
+            
+            Reconstructed_Longitudinal = np.stack([Reconstructed_Filtered_VG_Field[label[0][0] + '_Phy' + Scale][0],\
+                                              Reconstructed_Filtered_VG_Field[label[1][1] + '_Phy' + Scale][0],\
+                                              Reconstructed_Filtered_VG_Field[label[2][2] + '_Phy' + Scale][0]], axis = 0)
+            Reconstructed_Transverse = np.stack([Reconstructed_Filtered_VG_Field[label[0][1] + '_Phy' + Scale][0],\
+                                              Reconstructed_Filtered_VG_Field[label[0][2] + '_Phy' + Scale][0],\
+                                              Reconstructed_Filtered_VG_Field[label[1][0] + '_Phy' + Scale][0],\
+                                                  Reconstructed_Filtered_VG_Field[label[1][2] + '_Phy' + Scale][0],\
+                                                  Reconstructed_Filtered_VG_Field[label[2][0] + '_Phy' + Scale][0],\
+                                                  Reconstructed_Filtered_VG_Field[label[2][1] + '_Phy' + Scale][0]], axis = 0)
+            
+                        
+            x, y = Compute_1D_PDF(Original_Longitudinal, num_bins=num_bins_VG_PDF)
+            ax[0].plot(x, y, 'g', lw=2, label='Original {}'.format(label_plot[0]))
+            
+            x, y = Compute_1D_PDF(Reconstructed_Longitudinal, num_bins=num_bins_VG_PDF)
+            ax[0].plot(x, y, 'b', lw=2, label='Reconstructed {}'.format(label_plot[0]))
+            
+            ax[0].set_title('{}{} MSE = {:.4f}'.format(label_plot[0], Scale,\
+                                                          np.mean(( Original_Longitudinal - Reconstructed_Longitudinal) ** 2))\
+                               , fontsize=fontsize)
+            ax[0].set_xlim(-10, 10)
+            ax[0].set_ylim(-5, 0)
+            ax[0].set_xlabel('Normalized {}'.format(label_plot[0]), fontsize=fontsize)
+            ax[0].set_ylabel('log10(PDF)', fontsize=fontsize)
+            ax[0].grid(True)
 
+            ax[0].plot(xx, yy, 'r--', label="Gaussian")
+            ax[0].legend([ ["Original "+label_plot[0]], ["Reconstructed "+label_plot[0]],"Gaussian"], fontsize=fontsize)                        
+            
+            x, y = Compute_1D_PDF(Original_Transverse, num_bins=num_bins_VG_PDF)
+            ax[1].plot(x, y, 'g', lw=2, label='Original {}'.format(label_plot[1]))
+            
+            x, y = Compute_1D_PDF(Reconstructed_Transverse, num_bins=num_bins_VG_PDF)
+            ax[1].plot(x, y, 'b', lw=2, label='Reconstructed {}'.format(label_plot[1]))
+            
+            ax[1].set_title('{}{} MSE = {:.4f}'.format(label_plot[1], Scale,\
+                                                          np.mean(( Original_Transverse - Reconstructed_Transverse) ** 2))\
+                               , fontsize=fontsize)
+            ax[1].set_xlim(-10, 10)
+            ax[1].set_ylim(-5, 0)
+            ax[1].set_xlabel('Normalized {}'.format(label_plot[1]), fontsize=fontsize)
+            ax[1].set_ylabel('log10(PDF)', fontsize=fontsize)
+            ax[1].grid(True)
+
+            ax[1].plot(xx, yy, 'r--', label="Gaussian")
+            ax[1].legend([ ["Original "+label_plot[1]], ["Reconstructed "+label_plot[1]],"Gaussian"], fontsize=fontsize)
+            
+            
+            
+            plt.tight_layout()
+
+            makedir_exist_ok(path)
+            fig.savefig('{}/VG{}_PDF_LongTrans_{}.{}'.format(path, Scale, cfg['model_tag'], cfg['fig_format']), dpi=300,
+                        bbox_inches='tight',
+                        fontsize=fontsize)
+            plt.close()
+            
     return
