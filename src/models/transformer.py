@@ -180,6 +180,7 @@ class Transformer(nn.Module):
             _x = x.topk(1, 1, True, True)[1][:, 0]
             y.append(_x)
             x_ = torch.cat([x_, _x], dim=1)
+            x_ = x_[:, :(sum(cfg['seq_length']) - 1)]
         output = torch.cat(y, dim=1)
         return output
 
