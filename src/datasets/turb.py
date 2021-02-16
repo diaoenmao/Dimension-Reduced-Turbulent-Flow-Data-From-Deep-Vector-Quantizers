@@ -9,24 +9,25 @@ from utils import check_exists, makedir_exist_ok, save, load
 class Turb(Dataset):
     data_name = 'Turb'
 
-    def __init__(self, root, split):
+    def __init__(self, root, split, subset):
         self.root = os.path.expanduser(root)
         self.split = split
+        self.subset = subset
         if not check_exists(self.processed_folder):
             self.process()
-        self.data = load(os.path.join(self.processed_folder, '{}.pt'.format(self.split)))
+        self.input = load(os.path.join(self.processed_folder, '{}.pt'.format(self.split)))[self.subset]
 
     def __getitem__(self, index):
-        data = {}
-        for s in self.data:
-            if isinstance(self.data[s][index], str):
-                data[s] = torch.tensor(load(self.data[s][index]))
+        input = {}
+        for s in self.input:
+            if isinstance(self.input[s][index], str):
+                input[s] = torch.tensor(load(self.input[s][index]))
             else:
-                data[s] = torch.tensor(self.data[s][index])
-        return data
+                input[s] = torch.tensor(self.input[s][index])
+        return input
 
     def __len__(self):
-        return len(self.data['uvw'])
+        return len(self.input['uvw'])
 
     @property
     def processed_folder(self):
@@ -46,8 +47,8 @@ class Turb(Dataset):
         return
 
     def __repr__(self):
-        fmt_str = 'Dataset {}\nSize: {}\nRoot: {}\nSplit: {}'.format(self.__class__.__name__, self.__len__(), self.root,
-                                                                     self.split)
+        fmt_str = 'Dataset {}\nSize: {}\nRoot: {}\nSplit: {}\nSubset: {}'.format(
+            self.__class__.__name__, self.__len__(), self.root, self.split, self.subset)
         return fmt_str
 
     def make_data(self):
@@ -116,4 +117,4 @@ class Turb(Dataset):
             test_duvw.append(os.path.join(self.raw_folder, '{}_d.pkl'.format(test_ts[i])))
         train_uvw_result = {'ts': train_ts, 'uvw': train_uvw, 'duvw': train_duvw}
         test_uvw_result = {'ts': test_ts, 'uvw': test_uvw, 'duvw': test_duvw}
-        return train_uvw_result, test_uvw_result
+        return {'uvw': train_uvw_result}, {'uvw': test_uvw_result}

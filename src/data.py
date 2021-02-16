@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 import datasets
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
@@ -7,13 +6,13 @@ from torch.utils.data import Dataset
 from config import cfg
 
 
-def fetch_dataset(data_name):
+def fetch_dataset(data_name, subset):
     dataset = {}
     print('fetching data {}...'.format(data_name))
     root = './data/{}'.format(data_name)
     if data_name == 'Turb':
-        dataset['train'] = datasets.Turb(root=root, split='train')
-        dataset['test'] = datasets.Turb(root=root, split='test')
+        dataset['train'] = datasets.Turb(root=root, split='train', subset=subset)
+        dataset['test'] = datasets.Turb(root=root, split='test', subset=subset)
     else:
         raise ValueError('Not valid dataset name')
     print('data ready')
@@ -31,29 +30,29 @@ def input_collate(batch):
         return default_collate(batch)
 
 
-def make_data_loader(dataset, tag, shuffle=None):
+def make_data_loader(dataset):
     data_loader = {}
     for k in dataset:
-        _shuffle = cfg[tag]['shuffle'][k] if shuffle is None else shuffle[k]
-        data_loader[k] = DataLoader(dataset=dataset[k], shuffle=_shuffle, batch_size=cfg[tag]['batch_size'][k],
-                                    pin_memory=True, num_workers=cfg['num_workers'], collate_fn=input_collate,
-                                    worker_init_fn=np.random.seed(0))
+        data_loader[k] = torch.utils.data.DataLoader(dataset=dataset[k], shuffle=cfg['shuffle'][k],
+                                                     batch_size=cfg['batch_size'][k], pin_memory=True,
+                                                     num_workers=cfg['num_workers'], collate_fn=input_collate)
     return data_loader
 
 
 class BatchDataset(Dataset):
-    def __init__(self, dataset, seq_length):
+    def __init__(self, dataset, seq_length, seq_length_pre):
         super().__init__()
         self.dataset = dataset
         self.seq_length = seq_length
+        self.seq_length_pre = seq_length_pre
         self.S = dataset.size(1)
-        self.idx = list(range(0, self.S - (self.seq_length[0] + self.seq_length[1])))
+        self.idx = list(range(0, self.S - (seq_length + seq_length_pre), 1))
 
     def __len__(self):
         return len(self.idx)
 
     def __getitem__(self, index):
-        input = {'code': self.dataset[:, self.idx[index]:self.idx[index] + self.seq_length[0]],
-                 'ncode': self.dataset[:, self.idx[index] + self.seq_length[0]:self.idx[index] +
-                                                                               self.seq_length[0] + self.seq_length[1]]}
+        seq_length = min(self.seq_length, self.S - 1 - index)
+        input = {'code': self.dataset[:, self.idx[index]:self.idx[index] + seq_length],
+                 'ncode': self.dataset[:, self.idx[index] + seq_length:self.idx[index] +  seq_length + self.seq_length_pre]}
         return input

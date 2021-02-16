@@ -1,3 +1,3 @@
 from .vqvae import *
 from .transformer import *
-from .convlstm import *
+from .conv_lstm import *

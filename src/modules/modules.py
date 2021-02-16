@@ -27,7 +27,7 @@ class VectorQuantization(nn.Module):
         _, embedding_ind = dist.min(1)
         embedding_onehot = F.one_hot(embedding_ind, self.num_embedding).type(flatten.dtype)
         embedding_ind = embedding_ind.view(*input.shape[:-1])
-        quantize = F.embedding(embedding_ind, self.embedding.transpose(0, 1))
+        quantize = self.embedding_code(embedding_ind)
         if self.training:
             self.cluster_size.data.mul_(self.decay).add_(embedding_onehot.sum(0), alpha=1 - self.decay)
             embedding_sum = flatten.transpose(0, 1) @ embedding_onehot
@@ -44,4 +44,4 @@ class VectorQuantization(nn.Module):
         return quantize, diff, embedding_ind
 
     def embedding_code(self, embedding_ind):
-        return F.embedding(embedding_ind, self.embedding.transpose(0, 1)).transpose(1, -1).contiguous()
+        return F.embedding(embedding_ind, self.embedding.transpose(0, 1))
