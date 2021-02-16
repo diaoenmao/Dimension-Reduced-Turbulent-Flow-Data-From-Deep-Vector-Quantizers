@@ -143,19 +143,18 @@ def process_control():
             cfg['pred_length'] = 2
         else:
             raise ValueError('Not valid model name')
+    cfg['stats'] = make_stats()
     return
 
 
-def make_stats(dataset):
-    if os.path.exists('./data/stats/{}.pt'.format(dataset.data_name)):
-        stats = load('./data/stats/{}.pt'.format(dataset.data_name))
-    elif dataset is not None:
-        data_loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False, num_workers=0)
-        stats = Stats(dim=1)
-        with torch.no_grad():
-            for input in data_loader:
-                stats.update(input['img'])
-        save(stats, './data/stats/{}.pt'.format(dataset.data_name))
+def make_stats():
+    stats = {}
+    stats_path = './res/stats'
+    makedir_exist_ok(stats_path)
+    filenames = os.listdir(stats_path)
+    for filename in filenames:
+        stats_name = os.path.splitext(filename)[0]
+        stats[stats_name] = load(os.path.join(stats_path, filename))
     return stats
 
 

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from config import cfg
 from modules import VectorQuantization
-from .utils import init_param, spectral_derivative_3d, physics, weighted_mse_loss
+from .utils import init_param, spectral_derivative_3d, physics, weighted_mse_loss, normalize, denormalize
 
 
 class ResBlock(nn.Module):
@@ -145,8 +145,10 @@ class VQVAE(nn.Module):
     def forward(self, input, Epoch = None):
         output = {'loss': torch.tensor(0, device=cfg['device'], dtype=torch.float32)}
         x = input['uvw']
+        x = normalize(x)
         quantized, diff, output['code'] = self.encode(x)
         decoded = self.decode(quantized)
+        decoded = denormalize(decoded)
         output['uvw'] = decoded
         output['duvw'] = spectral_derivative_3d(output['uvw'])
         output['loss'] = F.mse_loss(output['uvw'], input['uvw']) + diff
