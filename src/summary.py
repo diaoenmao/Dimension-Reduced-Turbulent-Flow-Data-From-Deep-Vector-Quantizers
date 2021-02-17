@@ -26,6 +26,7 @@ if args['control_name']:
 cfg['control_name'] = '_'.join([cfg['control'][k] for k in cfg['control']])
 cfg['ae_name'] = 'vqvae'
 
+
 def main():
     process_control()
     cfg['batch_size'] = {'train': 1, 'test': 1}
@@ -202,9 +203,11 @@ def parse_summary(summary):
 
 
 def compute_flops(module, inp, out):
-    if isinstance(module, nn.Conv2d):
+    if isinstance(module, (nn.Conv2d, nn.ConvTranspose2d)):
         return compute_Conv2d_flops(module, inp, out)
-    elif isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.LayerNorm)):
+    elif isinstance(module, (nn.Conv3d, nn.ConvTranspose3d)):
+        return compute_Conv3d_flops(module, inp, out)
+    elif isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.LayerNorm, nn.BatchNorm3d)):
         return compute_Norm_flops(module, inp, out)
     elif isinstance(module, (nn.AvgPool2d, nn.MaxPool2d)):
         return compute_Pool2d_flops(module, inp, out)
@@ -221,7 +224,7 @@ def compute_flops(module, inp, out):
 
 
 def compute_Conv2d_flops(module, inp, out):
-    assert isinstance(module, nn.Conv2d)
+    assert isinstance(module, (nn.Conv2d, nn.ConvTranspose2d))
     assert len(inp.size()) == 4 and len(inp.size()) == len(out.size())
     batch_size = inp.size()[0]
     in_c = inp.size()[1]
@@ -239,8 +242,27 @@ def compute_Conv2d_flops(module, inp, out):
     return total_flops
 
 
+def compute_Conv3d_flops(module, inp, out):
+    assert isinstance(module, (nn.Conv3d, nn.ConvTranspose3d))
+    assert len(inp.size()) == 5 and len(inp.size()) == len(out.size())
+    batch_size = inp.size()[0]
+    in_c = inp.size()[1]
+    k_h, k_w, k_d = module.kernel_size
+    out_c, out_h, out_w, out_d = out.size()[1:]
+    groups = module.groups
+    filters_per_channel = out_c // groups
+    conv_per_position_flops = k_h * k_w * k_d * in_c * filters_per_channel
+    active_elements_count = batch_size * out_h * out_w * out_d
+    total_conv_flops = conv_per_position_flops * active_elements_count
+    bias_flops = 0
+    if module.bias is not None:
+        bias_flops = out_c * active_elements_count
+    total_flops = total_conv_flops + bias_flops
+    return total_flops
+
+
 def compute_Norm_flops(module, inp, out):
-    assert isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.LayerNorm))
+    assert isinstance(module, (nn.BatchNorm3d, nn.BatchNorm2d, nn.InstanceNorm2d, nn.LayerNorm))
     norm_flops = np.prod(inp.shape).item()
     if isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d)) and module.affine:
         norm_flops *= 2
