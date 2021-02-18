@@ -37,10 +37,8 @@ def main():
     num_epochs = [[num_epochs]]
     resume_mode = [[resume_mode]]
     num_experiments = [[experiments_step]]
-    exact_control_name = [['2', '3'], ['exact'], ['0', '0.01']]
-    physics_control_name = [['physics'], ['0', '0.001']]
-    exact_physics_control_name = [['exact-physics'], ['0.01-0.001']]
-    control_name = [exact_control_name, physics_control_name, exact_physics_control_name]
+    exact_physics_control_name = [['1', '2', '3'], ['exact-physics'], ['0.1-0.0001']]
+    control_name = [exact_physics_control_name]
     control_names = []
     for i in range(len(control_name)):
         control_names.extend(list('_'.join(x) for x in itertools.product(*control_name[i])))

@@ -36,9 +36,9 @@ class Encoder(nn.Module):
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
                 nn.Conv3d(hidden_size // 2, hidden_size, 4, 2, 1),
-                # nn.BatchNorm3d(hidden_size),
-                # nn.ReLU(inplace=True),
-                # nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
+                nn.BatchNorm3d(hidden_size),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
             ]
         elif stride == 4:
             blocks = [
@@ -46,16 +46,16 @@ class Encoder(nn.Module):
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
                 nn.Conv3d(hidden_size // 2, hidden_size, 4, 2, 1),
-                # nn.BatchNorm3d(hidden_size),
-                # nn.ReLU(inplace=True),
-                # nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
+                nn.BatchNorm3d(hidden_size),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
             ]
         elif stride == 2:
             blocks = [
                 nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
-                # nn.BatchNorm3d(hidden_size // 2),
-                # nn.ReLU(inplace=True),
-                # nn.Conv3d(hidden_size // 2, hidden_size, 3, 1, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size // 2, hidden_size, 3, 1, 1),
             ]
         else:
             raise ValueError('Not valid stride')
@@ -64,7 +64,7 @@ class Encoder(nn.Module):
         blocks.extend([
             nn.BatchNorm3d(hidden_size),
             nn.ReLU(inplace=True),
-            nn.Conv3d(hidden_size, output_size, 3, 1, 1)])
+            nn.Conv3d(hidden_size, output_size, 1, 1, 0)])
         self.blocks = nn.Sequential(*blocks)
 
     def forward(self, input):
@@ -82,9 +82,6 @@ class Decoder(nn.Module):
             nn.ReLU(inplace=True)])
         if stride == 8:
             blocks.extend([
-                # nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
-                # nn.BatchNorm3d(hidden_size),
-                # nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
@@ -95,9 +92,6 @@ class Decoder(nn.Module):
             ])
         elif stride == 4:
             blocks.extend([
-                # nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
-                # nn.BatchNorm3d(hidden_size),
-                # nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
@@ -105,9 +99,6 @@ class Decoder(nn.Module):
             ])
         elif stride == 2:
             blocks.extend([
-                # nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
-                # nn.BatchNorm3d(hidden_size),
-                # nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size, output_size, 4, 2, 1)
             ])
         self.blocks = nn.Sequential(*blocks)
@@ -142,7 +133,7 @@ class VQVAE(nn.Module):
         decoded = self.decode(quantized)
         return decoded
 
-    def forward(self, input, Epoch = None):
+    def forward(self, input, Epoch=None):
         output = {'loss': torch.tensor(0, device=cfg['device'], dtype=torch.float32)}
         x = input['uvw']
         x = normalize(x)
@@ -156,7 +147,7 @@ class VQVAE(nn.Module):
             if self.d_mode[i] == 'exact':
                 output['loss'] += self.d_commit[i] * weighted_mse_loss(output['duvw'], input['duvw'])
             elif self.d_mode[i] == 'physics':
-                if Epoch and (Epoch > 25) :                     
+                if Epoch and (Epoch > 25):
                     output['loss'] += self.d_commit[i] * physics(output['duvw'], input['duvw'])
             else:
                 raise ValueError('Not valid d_mode')

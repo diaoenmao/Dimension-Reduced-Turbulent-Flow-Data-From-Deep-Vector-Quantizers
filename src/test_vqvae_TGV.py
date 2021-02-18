@@ -62,8 +62,8 @@ def test(data_loader, model, logger, epoch):
     with torch.no_grad():
         metric = Metric()
         model.train(False)
-        np_data_decay_path = './res/np_data.npy'
-        data_decay = np.load(np_data_decay_path)
+        np_data_decay_path = './res/TGV_uvw.npy'
+        data_decay = np.load(np_data_decay_path)[:,:,:,:,None]
         input = {}
         input['uvw'] = torch.from_numpy(data_decay.reshape(-1,*data_decay.shape[:-1])).float()
         input['duvw'] = models.spectral_derivative_3d(input['uvw'])
@@ -80,7 +80,7 @@ def test(data_loader, model, logger, epoch):
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
-        vis(input, output, './output/vis_decay_'+cfg['model_tag'], model_evaluation = evaluation)
+        vis(input, output, './output/vis_TGV_'+cfg['model_tag'], model_evaluation = evaluation)
     return
 
 
