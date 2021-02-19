@@ -15,7 +15,7 @@ class ResBlock(nn.Module):
             nn.Conv3d(hidden_size, res_size, 3, 1, 1),
             nn.BatchNorm3d(res_size),
             nn.ReLU(inplace=True),
-            nn.Conv3d(res_size, hidden_size, 3, 1, 1),
+            nn.Conv3d(res_size, hidden_size, 1, 1, 0),
         )
 
     def forward(self, input):
@@ -35,20 +35,20 @@ class Encoder(nn.Module):
                 nn.Conv3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
-                nn.Conv3d(hidden_size // 2, hidden_size, 4, 2, 1),
-                nn.BatchNorm3d(hidden_size),
+                nn.Conv3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
-                nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
+                nn.Conv3d(hidden_size // 2, hidden_size, 3, 1, 1),
             ]
         elif stride == 4:
             blocks = [
                 nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
-                nn.Conv3d(hidden_size // 2, hidden_size, 4, 2, 1),
-                nn.BatchNorm3d(hidden_size),
+                nn.Conv3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
-                nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
+                nn.Conv3d(hidden_size // 2, hidden_size, 3, 1, 1),
             ]
         elif stride == 2:
             blocks = [
@@ -82,7 +82,10 @@ class Decoder(nn.Module):
             nn.ReLU(inplace=True)])
         if stride == 8:
             blocks.extend([
-                nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
+                nn.Conv3d(hidden_size, hidden_size // 2, 3, 1, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
@@ -92,14 +95,20 @@ class Decoder(nn.Module):
             ])
         elif stride == 4:
             blocks.extend([
-                nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
+                nn.Conv3d(hidden_size, hidden_size // 2, 3, 1, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size // 2, output_size, 4, 2, 1),
             ])
         elif stride == 2:
             blocks.extend([
-                nn.ConvTranspose3d(hidden_size, output_size, 4, 2, 1)
+                nn.Conv3d(hidden_size, hidden_size // 2, 3, 1, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(hidden_size // 2, output_size, 4, 2, 1)
             ])
         self.blocks = nn.Sequential(*blocks)
 

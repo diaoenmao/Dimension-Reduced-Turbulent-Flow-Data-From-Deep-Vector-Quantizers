@@ -118,14 +118,14 @@ def process_control():
     if cfg['data_name'] in ['Turb']:
         if cfg['model_name'] in ['vqvae']:
             cfg['batch_size'] = {'train': 1, 'test': 1}
-            cfg['num_epochs'] = 250
+            cfg['num_epochs'] = 200
             cfg['optimizer_name'] = 'Adam'
             cfg['lr'] = 1e-3
             cfg['weight_decay'] = 5e-4
             cfg['scheduler_name'] = 'ReduceLROnPlateau'
         elif cfg['model_name'] in ['conv_lstm']:
             cfg['batch_size'] = {'train': 1, 'test': 1}
-            cfg['num_epochs'] = 350
+            cfg['num_epochs'] = 200
             cfg['optimizer_name'] = 'Adam'
             cfg['lr'] = 1e-3
             cfg['weight_decay'] = 5e-4
@@ -134,7 +134,7 @@ def process_control():
             cfg['pred_length'] = 2
         elif cfg['model_name'] in ['transformer']:
             cfg['batch_size'] = {'train': 1, 'test': 1}
-            cfg['num_epochs'] = 250
+            cfg['num_epochs'] = 200
             cfg['optimizer_name'] = 'Adam'
             cfg['lr'] = 1e-3
             cfg['weight_decay'] = 5e-4

@@ -10,6 +10,7 @@ from metrics import Metric
 from utils import save, to_device, process_control, process_dataset, resume, collate, vis
 from logger import Logger
 import numpy as np
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 cudnn.benchmark = True
 parser = argparse.ArgumentParser(description='cfg')
@@ -63,24 +64,21 @@ def test(data_loader, model, logger, epoch):
         metric = Metric()
         model.train(False)
         np_data_decay_path = './res/TGV_uvw.npy'
-        data_decay = np.load(np_data_decay_path)[:,:,:,:,None]
+        data_decay = np.load(np_data_decay_path)[:, :, :, :, None]
         input = {}
-        input['uvw'] = torch.from_numpy(data_decay.reshape(-1,*data_decay.shape[:-1])).float()
+        input['uvw'] = torch.from_numpy(data_decay.reshape(-1, *data_decay.shape[:-1])).float()
         input['duvw'] = models.spectral_derivative_3d(input['uvw'])
-        i=0#for i, input in enumerate(data_loader):
-        #input = collate(input)
         input_size = input['uvw'].size(0)
         input = to_device(input, cfg['device'])
         output = model(input)
         output['loss'] = output['loss'].mean() if cfg['world_size'] > 1 else output['loss']
         evaluation = metric.evaluate(cfg['metric_name']['test'], input, output)
         logger.append(evaluation, 'test', input_size)
-        
         logger.append(evaluation, 'test')
         info = {'info': ['Model: {}'.format(cfg['model_tag']), 'Test Epoch: {}({:.0f}%)'.format(epoch, 100.)]}
         logger.append(info, 'test', mean=False)
         logger.write('test', cfg['metric_name']['test'])
-        vis(input, output, './output/vis_TGV_'+cfg['model_tag'], model_evaluation = evaluation)
+        vis(input, output, './output/vis_TGV_' + cfg['model_tag'], model_evaluation=evaluation)
     return
 
 
