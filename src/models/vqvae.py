@@ -25,7 +25,7 @@ class ResBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, input_size, hidden_size, num_res_block, res_size, stride):
+    def __init__(self, input_size, hidden_size, output_size, num_res_block, res_size, stride):
         super().__init__()
         if stride == 8:
             blocks = [
@@ -63,7 +63,8 @@ class Encoder(nn.Module):
             blocks.append(ResBlock(hidden_size, res_size))
         blocks.extend([
             nn.BatchNorm3d(hidden_size),
-            nn.ReLU(inplace=True)])
+            nn.ReLU(inplace=True),
+            nn.Conv3d(hidden_size, output_size, 1, 1, 0)])
         self.blocks = nn.Sequential(*blocks)
 
     def forward(self, input):
@@ -76,10 +77,11 @@ class Decoder(nn.Module):
         blocks = [nn.Conv3d(input_size, hidden_size, 3, 1, 1)]
         for i in range(num_res_block):
             blocks.append(ResBlock(hidden_size, res_size))
+        blocks.extend([
+            nn.BatchNorm3d(hidden_size),
+            nn.ReLU(inplace=True)])
         if stride == 8:
             blocks.extend([
-                nn.BatchNorm3d(hidden_size),
-                nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
@@ -90,8 +92,6 @@ class Decoder(nn.Module):
             ])
         elif stride == 4:
             blocks.extend([
-                nn.BatchNorm3d(hidden_size),
-                nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
                 nn.BatchNorm3d(hidden_size // 2),
                 nn.ReLU(inplace=True),
@@ -99,8 +99,6 @@ class Decoder(nn.Module):
             ])
         elif stride == 2:
             blocks.extend([
-                nn.BatchNorm3d(hidden_size),
-                nn.ReLU(inplace=True),
                 nn.ConvTranspose3d(hidden_size, output_size, 4, 2, 1)
             ])
         self.blocks = nn.Sequential(*blocks)
@@ -113,8 +111,7 @@ class VQVAE(nn.Module):
     def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32, embedding_size=64,
                  num_embedding=512, d_mode='exact', d_commit=None, vq_commit=0.25, loss_power_vg=2):
         super().__init__()
-        self.encoder = Encoder(input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
-        self.encoder_conv = nn.Conv3d(hidden_size, embedding_size, 1, 1, 0)
+        self.encoder = Encoder(input_size, hidden_size, embedding_size, num_res_block, res_size, stride=2 ** depth)
         self.quantizer = VectorQuantization(embedding_size, num_embedding, vq_commit)
         self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
         self.d_mode = d_mode
@@ -124,7 +121,6 @@ class VQVAE(nn.Module):
     def encode(self, input):
         x = input
         encoded = self.encoder(x)
-        encoded = self.encoder_conv(encoded)
         quantized, diff, code = self.quantizer(encoded)
         return quantized, diff, code
 
