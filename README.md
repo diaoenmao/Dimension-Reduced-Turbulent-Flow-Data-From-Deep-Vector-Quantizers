@@ -1,6 +1,7 @@
 # Dimension Reduced Turbulent Flow Data From Deep Vector Quantizers
-This is an implementation of [A Physics-Informed Vector Quantized Autoencoder for Data Compression of Turbulent Flow](https://arxiv.org/abs/2201.03617)  
-This is an implementation of [Dimension Reduced Turbulent Flow Data From Deep Vector Quantizers](https://arxiv.org/abs/2103.01074)
+[Journal of Turbulence] This is an implementation of [Dimension Reduced Turbulent Flow Data From Deep Vector Quantizers](https://arxiv.org/abs/2103.01074)
+[DCC 2022] This is an implementation of [A Physics-Informed Vector Quantized Autoencoder for Data Compression of Turbulent Flow](https://arxiv.org/abs/2201.03617)  
+
 
 ## Requirements
  - see requirements.txt
